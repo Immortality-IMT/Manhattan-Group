@@ -1,7 +1,6 @@
 # Manhattan Project (Blockchain)
-<div style="text-align: right">
-<img src="https://imt.cx/assets/img/logo/mpb.png" width="200" alt="Manhattan Project Blockchain">
-</div>
+
+<img align="right" src="https://imt.cx/assets/img/logo/mpb.png" width="200" alt="Manhattan Project Blockchain">
 
 Immortality cryptocurrency has a dedicated blockchain project. Immortality cryptocurrency migration to its own blockchain project is code named the Manhattan Project.
 
