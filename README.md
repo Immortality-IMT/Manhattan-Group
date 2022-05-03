@@ -9,3 +9,5 @@ There is no expediency in the production of this blockchain, we shall understand
 
 Immortality Cryptocurrency
 Homepage: https://imt.cx
+
+If you are interested in being part of the moderation of the project, join and discuss blockchain at our telegram https://t.me/immortality_IMT 
