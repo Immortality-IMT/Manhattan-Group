@@ -1,5 +1,5 @@
 # Manhattan Project (Blockchain)
-<div style="float: right">
+<div style="text-align: right">
 <img src="https://imt.cx/assets/img/logo/mpb.png" width="200" alt="Manhattan Project Blockchain">
 </div>
 
