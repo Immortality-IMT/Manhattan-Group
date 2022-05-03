@@ -1,4 +1,4 @@
-# Manhattan Blockchain Project
+# Manhattan Project
 Immortality cryptocurrency has a dedicated blockchain project. Immortality cryptocurrency migration to its own blockchain project is code named the Manhattan Project.
 
 The whitepaper is being written at https://imt.cx/blockchain.html
