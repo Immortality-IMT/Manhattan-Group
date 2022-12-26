@@ -8,6 +8,8 @@ We are DeSci
 
 We suggest to double the miner's block reward and fund DeSci with it.
 
+DeSci wants to fund future technologies with blockchain and crypto.
+
 The whitepaper is being written at https://imt.cx/blockchain.html
 
 There is no expediency in the production of this blockchain, we shall understand and solve all the problems in the whitepaper before we begin coding.
