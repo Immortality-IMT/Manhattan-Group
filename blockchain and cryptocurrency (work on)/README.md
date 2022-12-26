@@ -18,3 +18,13 @@ The code here has no networking code.
 Cryptocurrency and blockchain is mission critical and  relys on computing power to generate valid hases.
 
 The code is strictly C code.
+
+Test
+====
+
+Change the port in the code to 5000 and 5001, generate two versions.
+
+gcc node_discovery.c -o usersport5000
+gcc node_discovery.c -o usersport5001
+
+Each version will connect to eachother and exchange nodes.db
