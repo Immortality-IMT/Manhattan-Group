@@ -1,4 +1,4 @@
-# Manhattan Project (deSci Blockchain)
+# Manhattan Project (DeSci Blockchain)
 
 <img align="right" src="https://imt.cx/assets/img/logo/mpb.png" width="200" alt="Manhattan Project Blockchain">
 
