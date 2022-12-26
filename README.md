@@ -17,4 +17,10 @@ There is no expediency in the production of this blockchain, we shall understand
 Immortality Cryptocurrency
 Homepage: https://imt.cx
 
-If you are interested in being part of the moderation of the project, join and discuss blockchain at our telegram https://t.me/immortality_IMT 
+If you are interested in being part of the moderation of the project, join and discuss blockchain at our telegram https://t.me/immortality_IMT
+
+The project is broken up into seperate parts and each are independent of eachother. So work on what you want to work on. At release we shall bring it all together.
+
+Part 1: Node discovery system of the peer to peer netowrk
+Part 2: Propagation and latency of information to the peer to peer network
+Part 3: Is the blockchain stuff, mining, wallets, crunching numbers...
