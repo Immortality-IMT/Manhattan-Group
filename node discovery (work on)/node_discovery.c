@@ -27,7 +27,7 @@ A cryptocurrency would send blockchain updates and so on...
 
 This program does not do anything other than seeking out nodes to update its nodes.db.
 
-To test this, change the port and generate two versions, usesport5000 and usesport5001 are 
+To test this, change the port and generate two versions, usesport5000 and usesport5001 are
 binaries that connect to eachother and share their node files.
 Sample node.db format is [ip, port, expansion data 1, expansion data 2 (no spaces, no newlines)
 The left bracket is the record delimiter, the commas are the field delimiters.
@@ -37,8 +37,8 @@ contains the details of the over test server, resulting in a self connection.
 */
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -49,16 +49,42 @@ contains the details of the over test server, resulting in a self connection.
 #include <signal.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <netdb.h>
 #include <time.h>
 #include <netdb.h>
+#include <regex.h>
+
 
 #define MAX_RECORD_LENGTH 256
 #define MAX_FIELD_LENGTH 16
-#define FIELD_DELIMITER ","
-#define DELIMITER '['
-#define PORT 5000 // The port number to listen on
-#define BACKLOG 10 // The maximum number of pending connections in the queue
-#define BUFFER_SIZE (2 * 1024 * 1024) // Define a buffer size
+#define FIELD_DELIMITER ","             //nodes.db
+#define DELIMITER '['                   //nodes.db
+#define PORT 5000                       // Port number to listen on
+#define BACKLOG 10 // Maximum number of pending connections in the queue
+#define BUFFER_SIZE (2 * 1024 * 1024)   // Buffer size for nodes.db
+
+//Do not connect to self by finding public IP
+#define REGEX_PATTERN "(([0-9]{1,3}\\.){3}[0-9]{1,3})"
+//Service that offer what is my public IP service
+const char *services[4] = {
+    "api.ipify.org",
+    "checkip.dyndns.org",
+    "v4.ident.me",
+    "ident.me"
+};
+
+char *my_ip;
+
+#define REGEX_BUFFER_SIZE 100   // Extract IP from HTTP header
+#define MYIP_BUFFER 1024       // Get public IP
+
+//char buffer[MYIP_BUFFER];
+
+// Constants for the delay time (in seconds), check if pub ip has changed
+const int DELAY_TIME = 12 * 60 * 60;
+
+// Variables for measuring elapsed time, check if pub ip has changed
+clock_t start_time, current_time;
 
 // Combine nodes db leaving out duplicates
 // Define a structure to store the IP address and port number
@@ -117,13 +143,14 @@ void *thread_function() {
   // Generate a random seed based on the current time
   srand(time(NULL));
 
-  printf("Hello from the new thread!\n");
+  printf("Discover nodes thread activated!\n");
   while (!thread_should_end) {
 
     // Call the function to get a random IP and port from the text file "ips.txt"
     // Get a random record from the file "records.txt"
     char buffer[MAX_RECORD_LENGTH];
-    if (get_random_record("ips.txt", buffer) == 0) {
+    //if (get_random_record("ips.txt", buffer) == 0) {
+    if (get_random_record("nodes.db", buffer) == 0) {
     printf("Random record: %s\n", buffer);
     }
 
@@ -139,9 +166,6 @@ void *thread_function() {
    }
 
    //Connect to a server
-
-   /* Determine if ip and port is this server and skip connection if it is */
-
 
     //usage %s hostname port\n", argv[0]);
 
@@ -182,7 +206,7 @@ void *thread_function() {
         // Send a request to the server for the data
             bzero(buffer2, BUFFER_SIZE);
 
-                char *contents = read_file_to_string("ips.txt");
+                char *contents = read_file_to_string("nodes.db");
                 if (contents == NULL) {
                 // Handle error
                 }
@@ -203,7 +227,7 @@ void *thread_function() {
             //Get its node list
             char *file2 = read_from_socket_and_save_to_file(Csockfd);
             //update existing node list by adding new ones
-            combine_files("ips.txt", file2, "output_file.txt");
+            combine_files("nodes.db", file2, "output_file.txt");
 
         }
 
@@ -341,9 +365,21 @@ int get_random_record(char* filename, char* buffer) {
 } */
 
 //Function uses fseek() instead of reading the entire file into memory:
-int get_random_record(char* filename, char* buffer) {
+int get_random_record(char* filename, char* bufferx) {
+
+     char *field[4]; // see if the random record is this server, so get another record
+     char *dest; //my ip check seems to impact the buffer so it is copied
   // Seed the random number generator
-  srand(time(NULL));
+    size_t buffer_len;
+
+    dest = malloc(10);
+
+    srand(time(NULL));
+
+      //public ip
+   for (int j = 0; j < 4; j++) {
+    field[j] = malloc(MAX_FIELD_LENGTH);
+    }
 
   // Open the file for reading
   FILE* fp = fopen(filename, "r");
@@ -375,18 +411,42 @@ int get_random_record(char* filename, char* buffer) {
     int i = 0;
     c = fgetc(fp);
     while (c != DELIMITER && c != EOF && i < MAX_RECORD_LENGTH - 1) {
-        buffer[i] = c;
+        bufferx[i] = c;
         c = fgetc(fp);
         i++;
     }
-    buffer[i] = '\0';
+    bufferx[i] = '\0';
 
-    if (strlen(buffer) > 2) {
-        printf("Buffer record: %s", buffer);
-      break;
+
+
+            // Get the length of the buffer array, including the null terminator
+            buffer_len = strlen(bufferx) + 1;
+
+            // Allocate memory for the dest array
+            dest = realloc(dest, buffer_len);
+
+            if (dest == NULL) {
+                // malloc failed, handle the error
+                // ...
+            }
+
+
+     strcpy(dest, bufferx);
+     split_record(dest, field);
+
+    //printf("MYIP: %s - BUFFER: %s", my_ip, fields[0]);
+
+
+    if (strcmp(my_ip, field[0]) == 0) {
+        printf("Self connection attempt: %s\n", field[0]);
+    } else if (strlen(bufferx) > 3) {
+        printf("Valid record is: %s\n", bufferx);
+        free(dest);
+        break;
     } else {
-        printf("Buffer was empty: %s", buffer);
+        printf("Record was empty (read last delimiter)\n");
     }
+
 }
 
   // Close the file and return
@@ -657,6 +717,109 @@ int rename_file(const char* old_name, const char* new_name) {
   }
 }
 
+char *get_public_ip() {
+  // Select a random service
+  //int rand_num = arc4random_uniform(4); //OpenBSD arc4random.h library
+  //const char *hostname = services[rand_num];
+char buffer[MYIP_BUFFER];
+  // Select a random service
+  int rand_num = rand() % 3;
+  const char *hostname = services[rand_num];
+
+  // Resolve hostname to address
+  struct addrinfo hints;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_PASSIVE;
+
+  struct addrinfo *result;
+  int error;
+  if ((error = getaddrinfo(hostname, "http", &hints, &result)) != 0) {
+    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(error));
+    return NULL;
+  }
+
+    fprintf(stderr, "Public IP Server: %s and randnum = %d\n", hostname, rand_num);
+
+  // Create socket and connect to server
+  int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+  if (sockfd < 0) {
+    perror("socket");
+    return NULL;
+  }
+
+  if (connect(sockfd, result->ai_addr, result->ai_addrlen) < 0) {
+    perror("connect");
+    return NULL;
+  }
+
+  // Build and send HTTP request
+  char request[MYIP_BUFFER];
+  int request_length = snprintf(request, BUFFER_SIZE, "GET /?format=text HTTP/1.0\r\n\r\n");
+  if (send(sockfd, request, request_length, 0) < 0) {
+    perror("send");
+    return NULL;
+  }
+
+  // Receive response
+  char *response = malloc(MYIP_BUFFER);
+  int response_length = 0;
+  int bytes_received;
+  while ((bytes_received = recv(sockfd, buffer, BUFFER_SIZE - 1, 0)) > 0) {
+    buffer[bytes_received] = '\0';
+    response_length += bytes_received;
+    response = realloc(response, response_length + 1);
+    strcat(response, buffer);
+  }
+  if (bytes_received < 0) {
+    perror("recv");
+    return NULL;
+  }
+
+  // Close socket
+  close(sockfd);
+
+  return response;
+}
+
+char *extract_ipv4(char *str) {
+  // Check if regular expression is already compiled
+  static regex_t regex;
+  static int compiled = 0;
+
+  if (!compiled) {
+    // Compile regular expression
+    int reti = regcomp(&regex, REGEX_PATTERN, REG_EXTENDED);
+    if (reti) {
+      char msgbuf[100];
+      regerror(reti, &regex, msgbuf, sizeof(msgbuf));
+      fprintf(stderr, "Could not compile regex: %s\n", msgbuf);
+      return NULL;
+    }
+    compiled = 1;
+  }
+
+  // Execute regular expression
+  regmatch_t matches[2];
+  int reti = regexec(&regex, str, 2, matches, 0);
+  if (!reti) {
+    // Allocate memory for the IPv4 address
+    char *ip = malloc(16);
+    memcpy(ip, &str[matches[1].rm_so], matches[1].rm_eo - matches[1].rm_so);
+    ip[matches[1].rm_eo - matches[1].rm_so] = '\0';
+    return ip;
+  } else if (reti == REG_NOMATCH) {
+    printf("No match\n");
+    return NULL;
+  } else {
+    char msgbuf[100];
+    regerror(reti, &regex, msgbuf, sizeof(msgbuf));
+    fprintf(stderr, "Regex match failed: %s\n", msgbuf);
+    return NULL;
+  }
+}
+
 
 int srv_close(int fd) {
   // Close the socket
@@ -687,9 +850,32 @@ int main(void) {
   // Create the socket
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
   pthread_t thread;
+  // Initialize the start time
+    start_time = clock();
 
     // Register the signal handler for the SIGINT signal (Ctrl+C)
     signal(SIGINT, sigintHandler);
+
+      //get public ip on start
+     srand(time(NULL));  // Seed random number generator
+
+        char *response = get_public_ip();
+            if (response == NULL) {
+                fprintf(stderr, "Failed to get public IP\n");
+                //return 1;
+            }
+
+        //char *ip = extract_ipv4(response);
+        my_ip = extract_ipv4(response);
+            if (my_ip == NULL) {
+                fprintf(stderr, "Failed to extract IPv4 address\n");
+                //return 1;
+            }
+
+        printf("Public IP is: %s\n", my_ip);
+        //my_ip is global variable
+        free(response);
+
 
   // Check for errors
   if (sockfd < 0) {
@@ -723,6 +909,36 @@ int main(void) {
 
   // Enter the main loop
   while (!sigintReceived) {
+
+    //Check public ip everyday
+    //Check if the delay time has passed
+     /*   current_time = clock();
+        if ((current_time - start_time) / CLOCKS_PER_SEC >= DELAY_TIME) {
+
+            srand(time(NULL));  // Seed random number generator
+
+        char *response = get_public_ip();
+            if (response == NULL) {
+                fprintf(stderr, "Failed to get public IP\n");
+                //return 1;
+            }
+
+        //char *ip = extract_ipv4(response);
+        my_ip = extract_ipv4(response);
+            if (my_ip == NULL) {
+                fprintf(stderr, "Failed to extract IPv4 address\n");
+                //return 1;
+            }
+
+    //    printf("Public IP: %s\n", ip);
+    //    free(ip);
+        free(response);
+
+             // Reset the start time
+            start_time = current_time;
+    } */
+
+
     // Accept an incoming connection
     struct sockaddr_in cli_addr;
     socklen_t clilen = sizeof(cli_addr);
@@ -743,7 +959,7 @@ int main(void) {
 
     // Send a response to the client
 
-    char *contents = read_file_to_string("ips.txt");
+    char *contents = read_file_to_string("nodes.db");
     if (contents == NULL) {
     // Handle error
     }
