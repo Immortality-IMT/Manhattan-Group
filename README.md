@@ -10,9 +10,7 @@ We suggest to double the miner's block reward and fund DeSci with it.
 
 DeSci wants to fund future technologies with blockchain and crypto.
 
-<video src="https://www.youtube.com/embed/-DeMklVWNdA" width="320" height="240" controls>
-  Your browser does not support the video tag.
-</video>
+[![Watch the video](https://img.youtube.com/vi/T-D1KVIuvjA/maxresdefault.jpg)](https://www.youtube.com/embed/-DeMklVWNdA)
 
 The whitepaper is being written at https://imt.cx/blockchain.html
 
