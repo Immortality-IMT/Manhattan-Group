@@ -4,11 +4,11 @@
 
 Immortality cryptocurrency has a dedicated blockchain project. Immortality cryptocurrency migration to its own blockchain project is code named the Manhattan Project.
 
-We are DeSci, watch a video on deci here... https://youtu.be/-DeMklVWNdA
+We are deSci, watch a video on deSci here... https://youtu.be/-DeMklVWNdA
 
-We suggest to double the miner's block reward and fund DeSci with it.
+We suggest to double the miner's block reward and fund deSci with it.
 
-DeSci wants to fund future technologies with blockchain and crypto.
+deSci wants to fund future technologies with blockchain and crypto.
 
 The whitepaper is being written at https://imt.cx/blockchain.html
 
