@@ -22,3 +22,14 @@ on the network. The client is a thread that connects to server from its node.db 
 Node discovery is not mission critical and therefore, nodes could only search for other nodes connecting to another server once per minute or even once per day.
 
 The code is strictly C code.
+
+
+Test
+====
+
+Change the port in the code to 5000 and 5001, generate two versions.
+
+gcc node_discovery.c -o usersport5000
+gcc node_discovery.c -o usersport5001
+
+Each version will connect to eachother and exchange nodes.db
