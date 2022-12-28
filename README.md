@@ -6,7 +6,7 @@ Immortality cryptocurrency has a dedicated blockchain project. Immortality crypt
 
 We are deSci, watch a video on deSci here... https://youtu.be/-DeMklVWNdA
 
-We suggest to double the miner's block reward and fund deSci with it.
+We suggest to double the miner's block reward and fund deSci with it. The miner is retricted to donate the extra block reward to whomever they choose.
 
 deSci wants to fund future technologies with blockchain and crypto.
 
