@@ -21,64 +21,41 @@ The nodes.db file holds all the ips and port of the known network, that the node
 Node discovery is about connecting to servers and grabbing their list of nodes database and vice versa.
 
 An example P2P chat program would then parse the nodes.db file and connect to every ip to send a message.
-An example P2P file sharing program would do the same if it wanted everyone to hold the file, more
-extensively it would expand nodes.db to include the files held by a particular node.
-A cryptocurrency would send blockchain updates and so on...
+An example P2P file sharing program would do the same, more extensively it would expand nodes.db to
+include the files held by a particular node.
+A cryptocurrency would send transactions and blocks and so on...
 
 This program does not do anything other than seeking out nodes to update its nodes.db.
 
-To test this, change the port and generate two versions, usesport5000 and usesport5001 are
-binaries that connect to eachother and share their node files.
-Sample node.db format is [ip, port, expansion data 1, expansion data 2 (no spaces, no newlines)
-The left bracket is the record delimiter, the commas are the field delimiters.
-[127.0.0.1,5000,34,43[127.0.0.1,5001,43,54
+To test this, change the port and generate two versions, usesport5000 and usesport5001, the
+binaries connect to eachother and share their node files.
+
+Sample node.db format is |ip, port, expansion data 1, expansion data 2| (no spaces, no newlines)
+The "|" symbol is a record delimiter, the "," are the field delimiters.
+|127.0.0.1,5000,34,43|127.0.0.1,5001,43,54|. The flat file must have | on either end of the file.
 ips.txt is being used for testing purposes so the file is not overwritten
-contains the details of the over test server, resulting in a self connection.
+
+Commands:
+
+gcc -O0 -g -pthread node_discovery.c -o node_discovery
+gcc -O0 -g -pthread node_discovery.c functions.h -o file1
+gdb node_discovery core
+bt
+ps aux | grep node_discovery | awk '{print $2}' | xargs kill -9
+
 */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <pthread.h>
-#include <stdbool.h>
-#include <signal.h>
-#include <fcntl.h>
-#include <errno.h>
-#include <netdb.h>
-#include <time.h>
-#include <netdb.h>
-#include <regex.h>
-
+#include "functions.h"
 
 #define MAX_RECORD_LENGTH 256
 #define MAX_FIELD_LENGTH 16
 #define FIELD_DELIMITER ","             //nodes.db
-#define DELIMITER '['                   //nodes.db
+#define DELIMITER '|'                   //nodes.db
 #define PORT 5000                       // Port number to listen on
 #define BACKLOG 10 // Maximum number of pending connections in the queue
 #define BUFFER_SIZE (2 * 1024 * 1024)   // Buffer size for nodes.db
 
-//Do not connect to self by finding public IP
-#define REGEX_PATTERN "(([0-9]{1,3}\\.){3}[0-9]{1,3})"
-//Service that offer what is my public IP service
-const char *services[4] = {
-    "api.ipify.org",
-    "checkip.dyndns.org",
-    "v4.ident.me",
-    "ident.me"
-};
-
-char *my_ip;
-
-#define REGEX_BUFFER_SIZE 100   // Extract IP from HTTP header
-#define MYIP_BUFFER 1024       // Get public IP
-
-//char buffer[MYIP_BUFFER];
+char *my_ip; //Hold the local public IP globally
 
 // Constants for the delay time (in seconds), check if pub ip has changed
 const int DELAY_TIME = 12 * 60 * 60;
@@ -129,7 +106,7 @@ int rename_file(const char* old_name, const char* new_name);
 //void *thread_function(void *arg) {
 void *thread_function() {
 
-    sleep(10);
+    //sleep(10);
 
     //Client connect
     int Csockfd, n;
@@ -385,7 +362,17 @@ int get_random_record(char* filename, char* bufferx) {
   FILE* fp = fopen(filename, "r");
   if (!fp) {
     fprintf(stderr, "Error: unable to open file '%s' for reading.\n", filename);
-    return 1;
+
+    /* Grab it from the internet */
+    int ret = get_missing_nodesdb();
+    if (ret == 0) {
+        fp = fopen(filename, "r");
+
+        if (!fp) {
+        //fprintf(stderr, "Error: unable to open file '%s' for reading.\n", filename);
+        return 1;
+        }
+     }
   }
 
   // Get the file size
@@ -718,13 +705,19 @@ int rename_file(const char* old_name, const char* new_name) {
 }
 
 char *get_public_ip() {
-  // Select a random service
-  //int rand_num = arc4random_uniform(4); //OpenBSD arc4random.h library
-  //const char *hostname = services[rand_num];
-char buffer[MYIP_BUFFER];
-  // Select a random service
-  int rand_num = rand() % 3;
-  const char *hostname = services[rand_num];
+
+    int MYIP_BUFFER = 1024;         // Get public IP
+    char buffer[MYIP_BUFFER];
+
+    const char *services[4] = {     // List third party ret public IP services
+        "api.ipify.org",
+        "checkip.dyndns.org",
+        "v4.ident.me",
+        "ident.me"
+    };
+
+    int rand_num = rand() % 3; // Select a random service
+    const char *hostname = services[rand_num];
 
   // Resolve hostname to address
   struct addrinfo hints;
@@ -784,16 +777,18 @@ char buffer[MYIP_BUFFER];
 }
 
 char *extract_ipv4(char *str) {
+
+  static const char* pattern = "(([0-9]{1,3}\\.){3}[0-9]{1,3})"; //IP regex
   // Check if regular expression is already compiled
   static regex_t regex;
   static int compiled = 0;
 
   if (!compiled) {
     // Compile regular expression
-    int reti = regcomp(&regex, REGEX_PATTERN, REG_EXTENDED);
-    if (reti) {
+    int ret = regcomp(&regex, pattern, REG_EXTENDED);
+    if (ret) {
       char msgbuf[100];
-      regerror(reti, &regex, msgbuf, sizeof(msgbuf));
+      regerror(ret, &regex, msgbuf, sizeof(msgbuf));
       fprintf(stderr, "Could not compile regex: %s\n", msgbuf);
       return NULL;
     }
@@ -802,24 +797,23 @@ char *extract_ipv4(char *str) {
 
   // Execute regular expression
   regmatch_t matches[2];
-  int reti = regexec(&regex, str, 2, matches, 0);
-  if (!reti) {
+  int ret = regexec(&regex, str, 2, matches, 0);
+  if (!ret) {
     // Allocate memory for the IPv4 address
     char *ip = malloc(16);
     memcpy(ip, &str[matches[1].rm_so], matches[1].rm_eo - matches[1].rm_so);
     ip[matches[1].rm_eo - matches[1].rm_so] = '\0';
     return ip;
-  } else if (reti == REG_NOMATCH) {
+  } else if (ret == REG_NOMATCH) {
     printf("No match\n");
     return NULL;
   } else {
     char msgbuf[100];
-    regerror(reti, &regex, msgbuf, sizeof(msgbuf));
+    regerror(ret, &regex, msgbuf, sizeof(msgbuf));
     fprintf(stderr, "Regex match failed: %s\n", msgbuf);
     return NULL;
   }
 }
-
 
 int srv_close(int fd) {
   // Close the socket
