@@ -41,6 +41,7 @@ ps aux | grep node_discovery | awk '{print $2}' | xargs kill -9
 #include "functions.h"
 
 char *my_ip; //Hold the local public IP globally
+#define PORT 5001
 
 // Global flag to track if the signal has been received
 int sigintReceived = 0;
@@ -64,7 +65,7 @@ void *thread_server(void *arg) {
     struct sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(5000);
+    serv_addr.sin_port = htons(PORT);
     serv_addr.sin_addr.s_addr = INADDR_ANY;
 
     // Bind the socket to the server address
@@ -169,7 +170,7 @@ void *thread_tasks(void *arg) {
         free(response);
 
         //Put it into the local nodes.db
-        //TODO
+        insert_node(my_ip, PORT); //publicy ip, PORT for other nodes to know
 
         //Post it the main repo nodes.db
         //TODO

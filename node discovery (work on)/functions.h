@@ -481,6 +481,31 @@ char *extract_ipv4(char *str) {
   }
 }
 
+int insert_node(const char* ip, int port) {
+    sqlite3* db;
+    char* error_message = 0;
+    int rc;
 
+    rc = sqlite3_open("nodes.db", &db);
+    if (rc) {
+    fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
+    sqlite3_close(db);
+    return 1;
+    }
+
+    char sql[256];
+    sprintf(sql, "INSERT OR IGNORE INTO nodes (ip, port, uptime, conecterror, exp1, exp2, exp3) VALUES ('%s', %d, 0, 0, 0, 0, 0)", ip, port);
+
+    rc = sqlite3_exec(db, sql, 0, 0, &error_message);
+    if (rc != SQLITE_OK) {
+    fprintf(stderr, "SQL error: %s\n", error_message);
+    sqlite3_free(error_message);
+    sqlite3_close(db);
+    return 1;
+}
+
+ sqlite3_close(db);
+ return 0;
+}
 
 #endif // FUNCTIONS_H_INCLUDED
