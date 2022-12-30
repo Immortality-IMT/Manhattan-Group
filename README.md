@@ -8,7 +8,7 @@ We are deSci, watch a video on deSci here... https://youtu.be/-DeMklVWNdA
 
 We suggest to double the miner's block reward and fund deSci with it. The miner is retricted to donate the extra block reward to whomever they choose.
 
-deSci wants to fund future technologies with blockchain and crypto.
+deSci wants to fund future technologies with blockchain and crypto. Technologies that unlock technologies, watershed technologies such as AGI would cause a universal upgrade. 
 
 The whitepaper is being written at https://imt.cx/blockchain.html
 
