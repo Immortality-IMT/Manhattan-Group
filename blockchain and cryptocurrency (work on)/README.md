@@ -11,10 +11,10 @@ Such as local transactions and hashing blocks, wallet, mining...
 
 Once this data is packaged it is send to Part 2 to be distributed to the network.
 
-Any updates and improvement to the node discovery system should go here.
+Any updates and improvement to the node blockchain, cryptocurrency system should go here.
 
 The code here has no networking code.
 
-Cryptocurrency and blockchain is mission critical and  relys on computing power to generate valid hases.
+Cryptocurrency and blockchain is mission critical and relys on computing power to generate valid hashes.
 
 The code is strictly C code.
