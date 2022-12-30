@@ -26,6 +26,8 @@ A client connect will send its nodes.db and receive the server's nodes.db. Datab
 
 Node discovery is not mission-critical and therefore, nodes can search for other nodes, connecting to servers once per minute or even once per day.
 
+The winning strategy of node discovery, is how much of the network does each node know about? Every node should always know as close to 100% of the network at all times.
+
 The code is strictly C code.
 
 
