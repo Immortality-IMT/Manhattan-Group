@@ -8,18 +8,23 @@ Part 3: Blockchain and Cryptocurrency
 
 This directory is node discovery code. Part 1 and Part 2 are the peer to peer networks. Part 1 is how the peer to peer network discovers new nodes.
 
-A node downloads and install the code and with it a node.db.
+The main tenant of a peer to peer network is that all nodes are equal in function.
 
-All nodes are sending their IP address and port to the this node.db, so that a new node can bootstrap itself to the network.
+A node downloads and installs this code and with it a nodes.db
 
-Along with this nodes are contacting other nodes and exchanging and updating their node.db.
+nodes.db is an sqlite3 database.
+
+All nodes are sending their IP address and port to the this nodes.db, so that new nodes can bootstrap themselves to the network.
+
+Along with this, nodes are contacting other nodes and exchanging and updating their nodes.db
 
 Any updates and improvement to the node discovery system should go here.
 
-The code here is a server and a client in the one program. The server is the main program and accept connection from nodes working to discover other nodes
-on the network. The client is a thread that connects to server from its node.db where they exchange node.db database and updat them.
+The code makes two threads, a server thread and a client thread in the one program. The server thread accepts connection from nodes working to discover other nodes on the network. The client thread connects to the server from ip's and ports found in its nodes.db where they exchange nodes.db databases and update them.
 
-Node discovery is not mission critical and therefore, nodes could only search for other nodes connecting to another server once per minute or even once per day.
+A client connect will send its nodes.db and receive the servers nodes.db. Database functions then update the database with any new nodes found.
+
+Node discovery is not mission critical and therefore, nodes should only search for other nodes connecting to another server once per minute or even once per day.
 
 The code is strictly C code.
 
@@ -27,9 +32,15 @@ The code is strictly C code.
 Test
 ====
 
-Change the port in the code to 5000 and 5001, generate two versions.
+Simple compile and run the node_discovery
 
-gcc node_discovery.c -o usersport5000
-gcc node_discovery.c -o usersport5001
+gcc -O0 -g -pthread node_discovery.c functions.h -o node_discovery -lsqlite
+
+node_discovery can self-connect without crashing.
+
+Additionally, change the port in the code to 5000 and 5001, generate two versions.
+
+gcc -O0 -g -pthread node_discovery.c functions.h -o node_discovery5000 -lsqlite
+gcc -O0 -g -pthread node_discovery.c functions.h -o node_discovery5001 -lsqlite
 
 Each version will connect to eachother and exchange nodes.db
