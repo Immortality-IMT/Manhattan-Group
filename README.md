@@ -6,7 +6,8 @@ Immortality cryptocurrency has a dedicated blockchain project. Immortality crypt
 
 We are deSci, watch a video on deSci here... https://youtu.be/-DeMklVWNdA
 
-We suggest doubling the miner's block reward and fund deSci with it. The miner is restricted to donate the extra block reward to watershed technologies.
+```We suggest doubling the miner's block reward and fund deSci with it. The miner is restricted to donate the extra block reward to watershed technologies.``` 
+
 deSci seeks to fund future technologies with blockchain and crypto. Technologies that unlock technologies, watershed technologies such as AGI, would cause a universal upgrade.
 
 The whitepaper is being written at https://imt.cx/blockchain.html
