@@ -4,7 +4,9 @@
 
 Immortality cryptocurrency has a dedicated blockchain project. Immortality cryptocurrency migration to its own blockchain project is code named the Manhattan Project.
 
-We are deSci, watch a video on deSci here... https://youtu.be/-DeMklVWNdA
+We are DeSci, watch a video here... https://youtu.be/-DeMklVWNdA
+
+DeSci seeks to fund future technologies with blockchain and crypto. Technologies that unlock technologies, watershed technologies such as AGI, would cause a universal upgrade.
 
 #### Some projects that DeSci should prioritize
 - Open source A.I such as GPT-Neo and GPT-J. Unsantized, uncensored, open source AGI.
@@ -15,8 +17,6 @@ We are deSci, watch a video on deSci here... https://youtu.be/-DeMklVWNdA
 If you are interested in being part of the moderation of the project, join and discuss blockchain at our telegram https://t.me/immortality_IMT
 
 ```Make mining profitable again. We suggest doubling the miner's block reward and fund deSci with it. The miner is restricted to donate the extra block reward to watershed technologies. Other methods have been proposed, such as Quadratic Funding.```
-
-deSci seeks to fund future technologies with blockchain and crypto. Technologies that unlock technologies, watershed technologies such as AGI, would cause a universal upgrade.
 
 The whitepaper is being written at https://imt.cx/blockchain.html
 
