@@ -17,6 +17,11 @@ There is no expediency in the production of this blockchain, we shall understand
 Immortality Cryptocurrency
 Homepage: https://imt.cx
 
+**Some projects that DeSci should priotize**
+- Open source A.I such as GPT-Neo and GPT-J. Unsantized, uncensored, open source AGI.
+- The Big Brain Project - Dish brain projects
+- Space Tourism
+
 If you are interested in being part of the moderation of the project, join and discuss blockchain at our telegram https://t.me/immortality_IMT
 
 The project is broken up into separate parts and each are independent of each other. So work on what you want to work on. At release, we shall bring it all together.
