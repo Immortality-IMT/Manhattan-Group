@@ -17,7 +17,7 @@ There is no expediency in the production of this blockchain, we shall understand
 Immortality Cryptocurrency
 Homepage: https://imt.cx
 
-**Some projects that DeSci should priotize**
+###### Some projects that DeSci should prioritize
 - Open source A.I such as GPT-Neo and GPT-J. Unsantized, uncensored, open source AGI.
 - The Big Brain Project - Dish brain projects
 - Space Tourism
