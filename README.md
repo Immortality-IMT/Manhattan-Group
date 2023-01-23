@@ -13,10 +13,13 @@ DeSci seeks to fund future technologies with blockchain and crypto. Technologies
 - The Big Brain Project - Dish brain projects
 - Space Tourism
 - Cure Aging
+- Renewable energy
 
 If you are interested in being part of the moderation of the project, join and discuss blockchain at our telegram https://t.me/immortality_IMT
 
-```Make mining profitable again. We suggest doubling the miner's block reward and fund deSci with it. The miner is restricted to donate the extra block reward to watershed technologies. Other methods have been proposed, such as Quadratic Funding.```
+#### How can DeSci work?
+
+```We suggest doubling the miner's block reward to fund deSci. The miner is restricted to donate the extra block reward to watershed technologies. Other methods have been proposed, such as Quadratic Funding.```
 
 The whitepaper is being written at https://imt.cx/blockchain.html
 
