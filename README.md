@@ -17,7 +17,7 @@ DeSci seeks to fund future technologies with blockchain and crypto. Technologies
 
 #### How can DeSci work?
 
-```We suggest doubling the miner's block reward to fund deSci. The miner is restricted to donate the extra block reward to watershed technologies. Other methods have been proposed, such as Quadratic Funding.```
+```We suggest doubling the miner's block reward and transaction fee to fund deSci. The miner is restricted to donate the extra block reward to watershed technologies. Other methods have been proposed, such as Quadratic Funding.```
 
 ```With the right agreement, a successful moonshot potentially injects significant capital into the ecosystem```
 
