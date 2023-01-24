@@ -9,11 +9,12 @@ We are DeSci, watch a video here... https://youtu.be/-DeMklVWNdA
 DeSci seeks to fund future technologies with blockchain and crypto. Technologies that unlock technologies, watershed technologies such as AGI, would cause a universal upgrade.
 
 #### Some projects that DeSci should prioritize
-- Open source A.I such as GPT-Neo and GPT-J. Unsantized, uncensored, open source AGI.
+- Open source A.I. such as GPT-Neo and GPT-J. Unsantized, uncensored, open source AGI.
 - The Big Brain Project - Dish brain projects
 - Space Tourism, indestructible human capsule guaranteeing safety
-- Cure Aging
-- Renewable energy
+- Cure Aging, live forever, feel good, Gorillaz
+- Renewable energy, POW from 100% renewables and the rest of the world as well
+- More computer power please, manufacture faster personal computers and offer them at great prices
 
 #### How can DeSci work?
 
