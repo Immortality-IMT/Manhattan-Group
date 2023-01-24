@@ -11,7 +11,7 @@ DeSci seeks to fund future technologies with blockchain and crypto. Technologies
 #### Some projects that DeSci should prioritize
 - Open source A.I such as GPT-Neo and GPT-J. Unsantized, uncensored, open source AGI.
 - The Big Brain Project - Dish brain projects
-- Space Tourism
+- Space Tourism, indestructible human capsule, safety guarantee
 - Cure Aging
 - Renewable energy
 
