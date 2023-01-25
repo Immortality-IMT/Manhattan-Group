@@ -13,7 +13,7 @@ DeSci seeks to fund future technologies with blockchain and crypto. Technologies
 - The Big Brain Project - Dish brain projects
 - Space Tourism, indestructible human capsule guaranteeing safety
 - Cure Aging, live forever, cure cancer, feel good Gorillaz
-- Renewable energy, POW from 100% renewables and the rest of the world as well
+- Renewable energy, turn the worlds deserts into solar power stations and 100% proof of word from renewables
 - More computer power please, manufacture faster personal computers and offer them at great prices
 
 #### How can DeSci work?
