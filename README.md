@@ -12,7 +12,7 @@ DeSci seeks to fund future technologies with blockchain and crypto. Technologies
 - Open source A.I. such as GPT-Neo and GPT-J. Unsantized, uncensored, open source AGI.
 - The Big Brain Project - Dish brain projects
 - Space Tourism, indestructible human capsule guaranteeing safety
-- Cure Aging, live forever, cure cancer, feel good Gorillaz
+- Cure Aging, live forever, cure cancer, feel good
 - Renewable energy, turn the worlds deserts into solar power stations and 100% proof of word from renewables
 - More computer power please, manufacture faster personal computers and offer them at great prices
 
