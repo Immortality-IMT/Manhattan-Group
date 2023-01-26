@@ -36,3 +36,6 @@ The project is broken up into separate parts and each are independent of each ot
 Part 1: Node discovery system of the peer to peer network
 Part 2: Propagation and latency of information to the peer to peer network
 Part 3: Is the blockchain stuff, mining, wallets, crunching numbers...
+Part 4: Smart contract platform
+
+<img align="right" src="/mpb.png" width="200" alt="Manhattan Project Blockchain">
