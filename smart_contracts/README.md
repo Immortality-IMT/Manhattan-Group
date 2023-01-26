@@ -22,8 +22,8 @@ https://ethervm.io/decompile
 Diassembly into vm executable opcodes...
 
 label_0000:
-// Inputs[1] { @0008  memory[0x40:0x60] }
-0000    60  PUSH1 0x60
+// Inputs[1] { @0008  memory[0x40:0x60] }<br />
+0000    60  PUSH1 0x60<br />
 0002    60  PUSH1 0x40
 0004    52  MSTORE
 0005    60  PUSH1 0x40
