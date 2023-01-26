@@ -40,3 +40,4 @@ label_0000:
 .....
 
 6. Each subsequent call to functions in the smart contract are transactions. Only the owner can sign and execute functions.
+7. Functions are executed by vm.c
