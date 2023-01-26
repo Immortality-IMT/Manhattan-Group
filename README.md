@@ -38,4 +38,4 @@ Part 2: Propagation and latency of information to the peer to peer network
 Part 3: Is the blockchain stuff, mining, wallets, crunching numbers...
 Part 4: Smart contract platform
 
-<img align="right" src="/mpb.png" width="200" alt="Manhattan Project Blockchain">
+<img align="right" src="https://github.com/Immortality-IMT/Manhattan-Project/blob/main/blockchain%20and%20cryptocurrency/screenshot_wallet.png" alt="Manhattan Project Blockchain Screenshot">
