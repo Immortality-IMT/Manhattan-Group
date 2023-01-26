@@ -22,17 +22,17 @@ https://ethervm.io/decompile
 Diassembly into vm executable opcodes...
 
 label_0000:
-	// Inputs[1] { @0008  memory[0x40:0x60] }
-	0000    60  PUSH1 0x60
-	0002    60  PUSH1 0x40
-	0004    52  MSTORE
-	0005    60  PUSH1 0x40
-	0007    80  DUP1
-	0008    51  MLOAD
-	0009    90  SWAP1
-	000A    81  DUP2
-	000B    01  ADD
-	000C    60  PUSH1 0x40
-    .....
+// Inputs[1] { @0008  memory[0x40:0x60] }
+0000    60  PUSH1 0x60
+0002    60  PUSH1 0x40
+0004    52  MSTORE
+0005    60  PUSH1 0x40
+0007    80  DUP1
+0008    51  MLOAD
+0009    90  SWAP1
+000A    81  DUP2
+000B    01  ADD
+000C    60  PUSH1 0x40
+.....
 
 6. Each subsequent call to functions in the smart contract are transactions. Only the owner can sign and execute functions.
