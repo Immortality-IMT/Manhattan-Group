@@ -1,10 +1,12 @@
-The code is broken up into 3 parts
+The code is broken up into 4 parts
 
 Part 1: Node discovery
 
 Part 2: Propagation, latency
 
 Part 3: Blockchain and Cryptocurrency
+
+Part 4: Smart contract platform
 
 This directory is node discovery code. Part 1 and Part 2 are the peer to peer networks. Part 1 is how the peer to peer network discovers new nodes.
 
