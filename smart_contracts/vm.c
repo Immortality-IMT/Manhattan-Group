@@ -5,6 +5,8 @@ C code defines a virtual machine to execute opcodes, specifically for smart cont
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <math.h>
 
 #define MAX_STACK_SIZE 1024
 #define MAX_MEMORY_SIZE 1048576
@@ -16,12 +18,85 @@ typedef struct {
     int memory_size;
     int storage[MAX_MEMORY_SIZE];
     int balance;
+//
+    int address;
+    int origin;
+    int caller;
+    int *calldata;
+    int calldata_size;
+    int code_size;
+    int *code;
+    int gas;
+    int gas_price;
+    int gas_limit;
+    int coinbase;
+    int timestamp;
+    int block_number;
+    int difficulty;
+    int value;
 } evm_state;
+
+void load_smart_contract(evm_state* state, const char* bytecode, int bytecode_size) {
+    int i;
+    for (i = 0; i < bytecode_size; i++) {
+        state->memory[i] = bytecode[i];
+    }
+    //memcpy(state->memory, bytecode, bytecode_size);
+    state->memory_size = bytecode_size;
+}
+
+void load_contract_to_memory(evm_state* state, const char* bytecode) {
+    int i;
+    for (i = 0; i < MAX_MEMORY_SIZE; i++) {
+        state->memory[i] = bytecode[i];
+    }
+        state->memory_size = i;
+}
+
+const char* load_contract_from_file(const char* file_path) {
+    // Open the file
+    FILE* fp = fopen(file_path, "r");
+    if (!fp) {
+        printf("Error: unable to open file %s\n", file_path);
+        return NULL;
+    }
+
+    // Determine the size of the file
+    fseek(fp, 0, SEEK_END);
+    size_t file_size = ftell(fp);
+    rewind(fp);
+
+    // Allocate memory for the bytecode
+    char* bytecode = (char*) malloc(file_size + 1);
+    if (!bytecode) {
+        printf("Error: unable to allocate memory for bytecode\n");
+        fclose(fp);
+        return NULL;
+    }
+
+    // Read the bytecode from the file
+    size_t bytes_read = fread(bytecode, sizeof(char), file_size, fp);
+    if (bytes_read != file_size) {
+        printf("Error: unexpected number of bytes read\n");
+        free(bytecode);
+        fclose(fp);
+        return NULL;
+    }
+
+    // Null-terminate the bytecode
+    bytecode[file_size] = '\0';
+
+    // Close the file
+    fclose(fp);
+
+    // Return the bytecode
+    return bytecode;
+}
 
 //execute_contract(): A function that takes a smart contract bytecode and a set of input parameters, and executes the contract's code.
 void execute_contract(evm_state* state, const char* bytecode) {
     int opcode;
-    int a, b;
+    int a, b, c;
     int pc = 0;
     while (bytecode[pc] != 0x00) {
         opcode = bytecode[pc++];
@@ -273,9 +348,28 @@ void execute_contract(evm_state* state, const char* bytecode) {
     }
 }
 
-/* 
-TODO
+int main() {
+    evm_state state;
+    state.memory_size = 0;
+    state.stack_pointer = 0;
+    state.balance = 0;
 
+    // load contract bytecode from file or source
+    const char* contract_bytecode = load_contract_from_file("smart_contract.bin");
+
+    int contract_bytecode_size = sizeof(contract_bytecode);
+    load_smart_contract(&state, contract_bytecode, contract_bytecode_size);
+
+    // load contract into virtual machine's memory
+    load_contract_to_memory(&state, contract_bytecode);
+
+    // execute the contract
+    execute_contract(&state, contract_bytecode);
+
+    return 0;
+}
+
+/* 
 load_contract(): function takes a smart contract bytecode and loads it into the virtual machine's memory, preparing it for execution.
 
 call_function(): function takes a contract address, function signature, and input parameters and sends a message to the virtual machine to call the specified function on the smart contract.
