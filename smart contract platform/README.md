@@ -1,3 +1,7 @@
+Compile
+-------
+gcc -o vm vm.c -lm
+
 Process of smart contract functionality
 ---------------------------------------
 
