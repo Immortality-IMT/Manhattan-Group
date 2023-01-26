@@ -6,6 +6,8 @@ Part 2: Propagation, latency
 
 Part 3: Blockchain and Cryptocurrency
 
+Part 4: Smart contract platform
+
 This directory is the propagation and latency code. Part 1 and Part 2 are the peer to peer networks. Part 2 is how transactions and block propagate and are latent across the network.
 
 A node has a transaction or a block to propagate to the peer to peer network. To be included in a mempool or blockpool.
