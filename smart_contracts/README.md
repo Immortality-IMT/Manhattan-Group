@@ -20,19 +20,19 @@ EVM Bytecode for HelloWorld
 https://ethervm.io/decompile
 
 Diassembly into vm executable opcodes...
-
+<br />
 label_0000:
 // Inputs[1] { @0008  memory[0x40:0x60] }<br />
 0000    60  PUSH1 0x60<br />
-0002    60  PUSH1 0x40
-0004    52  MSTORE
-0005    60  PUSH1 0x40
-0007    80  DUP1
-0008    51  MLOAD
-0009    90  SWAP1
-000A    81  DUP2
-000B    01  ADD
-000C    60  PUSH1 0x40
+0002    60  PUSH1 0x40<br />
+0004    52  MSTORE<br />
+0005    60  PUSH1 0x40<br />
+0007    80  DUP1<br />
+0008    51  MLOAD<br />
+0009    90  SWAP1<br />
+000A    81  DUP2<br />
+000B    01  ADD<br />
+000C    60  PUSH1 0x40<br />
 .....
 
 6. Each subsequent call to functions in the smart contract are transactions. Only the owner can sign and execute functions.
