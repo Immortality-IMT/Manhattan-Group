@@ -1,4 +1,4 @@
-The code is broken up into 3 parts
+The code is broken up into 4 parts
 
 Part 1: Node discovery
 
