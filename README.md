@@ -28,14 +28,14 @@ The whitepaper is being written at https://imt.cx/blockchain.html
 
 There is no expediency in the production of this blockchain, we shall understand and solve all the problems in the whitepaper before we begin coding.
 
+<img align="right" src="https://github.com/Immortality-IMT/Manhattan-Project/blob/main/blockchain%20and%20cryptocurrency/screenshot_wallet.png" alt="Manhattan Project Blockchain Screenshot">
+
 Immortality Cryptocurrency
 Homepage: https://imt.cx
 
-<img align="right" src="https://github.com/Immortality-IMT/Manhattan-Project/blob/main/blockchain%20and%20cryptocurrency/screenshot_wallet.png" alt="Manhattan Project Blockchain Screenshot">
-
 The project is broken up into separate parts and each are independent of each other. So work on what you want to work on. At release, we shall bring it all together.
 
-Part 1: Node discovery system of the peer to peer network
-Part 2: Propagation and latency of information to the peer to peer network
-Part 3: Is the blockchain stuff, mining, wallets, crunching numbers...
-Part 4: Smart contract platform
+Part 1: Node discovery system of the peer to peer network<br />
+Part 2: Propagation and latency of information to the peer to peer network<br />
+Part 3: Is the blockchain stuff, mining, wallets, crunching numbers...<br />
+Part 4: Smart contract platform<br />
