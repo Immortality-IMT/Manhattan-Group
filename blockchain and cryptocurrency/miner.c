@@ -1,7 +1,8 @@
 #include "functions.h"
 
 /*
-   Grab transactions from the transaction pool (transactions.db) and make a block
+    Grab transactions from the transaction pool (transactions.db) and make a block
+    gcc -g -o wallet transactions.c wallet.c verifications.c functions.h miner.c blockchain.c -lssl -lcrypto -lsqlite3 -lz
 */
 
 //void create_block() {
@@ -176,6 +177,8 @@ void add_block(struct block new_block) {
 /* mine */
 int mine() {
    
+    start_blockchain(); //generate a new blockchain db
+
     struct block new_block = create_block();
     add_block(new_block);
     printf("Block added to blockchain: %s\n", new_block.block_hash);
