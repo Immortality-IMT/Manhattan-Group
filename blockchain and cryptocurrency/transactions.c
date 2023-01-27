@@ -17,7 +17,9 @@ int create_transaction() {
         return 1;
     }
 
-    char *create_table_query = "CREATE TABLE IF NOT EXISTS transactions (txid TEXT PRIMARY KEY, sender TEXT, recipient TEXT, amount REAL, miners_fee REAL, moonshot_fee REAL, data TEXT, timestamp DATETIME, r_hex_signature TEXT, s_hex_signature TEXT);";
+    char *create_table_query = "CREATE TABLE IF NOT EXISTS transactions (txid TEXT PRIMARY KEY, sender TEXT, recipient TEXT, amount REAL, miners_fee REAL, moonshot_fee REAL, data TEXT, data_type INTEGER, timestamp DATETIME, r_hex_signature TEXT, s_hex_signature TEXT);";
+
+//    char *create_table_query = "CREATE TABLE IF NOT EXISTS transactions (txid TEXT PRIMARY KEY, sender TEXT, recipient TEXT, amount REAL, miners_fee REAL, moonshot_fee REAL, data TEXT, timestamp DATETIME, r_hex_signature TEXT, s_hex_signature TEXT);";
     rc = sqlite3_exec(db, create_table_query, 0, 0, &err_msg);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "SQL error: %s\n", err_msg);
@@ -30,7 +32,7 @@ int create_transaction() {
     scanf("%127s", new_transaction.sender);
 
     printf("Enter recipient address: ");
-    scanf(" %s", new_transaction.recipient);
+    scanf("%127s", new_transaction.recipient);
 
     printf("Enter amount: ");
     scanf("%lf", &new_transaction.amount);
@@ -43,6 +45,9 @@ int create_transaction() {
 
     printf("Enter data (smart contract or a text description of the transaction) : ");
     scanf("%s", new_transaction.data);
+
+    printf("What is this data? (1 text, 2 smart contract, 3 image...) : ");
+    scanf("%d", &new_transaction.data_type);
 
     new_transaction.timestamp = time(NULL);
 
@@ -88,7 +93,7 @@ int create_transaction() {
 
 /* Put into the transaction pool, send it, broadcast to the network, they perform verification and block it up... */
 
-    int ret = snprintf(sql, sizeof(sql), "INSERT INTO transactions (txid, sender, recipient, amount, miners_fee, moonshot_fee, data, timestamp, r_hex_signature, s_hex_signature) VALUES ('%s', '%s', '%s', %f, %f, %f, '%s', %ld, '%s', '%s');", new_transaction.txid, new_transaction.sender, new_transaction.recipient, new_transaction.amount, new_transaction.miners_fee, new_transaction.moonshot_fee, new_transaction.data, new_transaction.timestamp, new_transaction.r_hex_signature, new_transaction.s_hex_signature);
+    int ret = snprintf(sql, sizeof(sql), "INSERT INTO transactions (txid, sender, recipient, amount, miners_fee, moonshot_fee, data, data_type, timestamp, r_hex_signature, s_hex_signature) VALUES ('%s', '%s', '%s', %f, %f, %f, '%s', '%d', %ld, '%s', '%s');", new_transaction.txid, new_transaction.sender, new_transaction.recipient, new_transaction.amount, new_transaction.miners_fee, new_transaction.moonshot_fee, new_transaction.data, new_transaction.data_type, new_transaction.timestamp, new_transaction.r_hex_signature, new_transaction.s_hex_signature);
 
     rc = sqlite3_open(DB_TRANSACTIONS, &db);
     if (rc != SQLITE_OK) {
@@ -204,3 +209,85 @@ void get_txid(struct transaction* tx) {
 }
 */
 
+
+/*
+Compress data, used for the transaction variable data[1mB] which holds any info, text, iamges and including smart_contract data.
+
+char data[] = "Hello World!";
+int data_len = sizeof(data);
+
+char compressed_data[100];
+int compressed_len;
+
+compress_data(data, data_len, compressed_data, &compressed_len);
+
+char decompressed_data[100];
+int decompressed_data_len;
+
+decompress_data(compressed_data, compressed_len, decompressed_data, &decompressed_data_len);
+*/
+
+int compress_data(const char *data, int data_len, char *compressed_data, int *compressed_len) {
+    int ret;
+    z_stream strm;
+
+    // Initialize the zlib stream
+    strm.zalloc = Z_NULL;
+    strm.zfree = Z_NULL;
+    strm.opaque = Z_NULL;
+    ret = deflateInit(&strm, Z_DEFAULT_COMPRESSION);
+    if (ret != Z_OK) {
+        return ret;
+    }
+
+    // Compress the data
+    strm.avail_in = data_len;
+    strm.next_in = (unsigned char *) data;
+    strm.avail_out = *compressed_len;
+    strm.next_out = (unsigned char *) compressed_data;
+    ret = deflate(&strm, Z_FINISH);
+    if (ret != Z_STREAM_END) {
+        deflateEnd(&strm);
+        return ret;
+    }
+
+    // Update the compressed data length
+    *compressed_len = strm.total_out;
+
+    // Clean up
+    deflateEnd(&strm);
+    return Z_OK;
+}
+
+// Decompress data
+int decompress_data(const char *compressed_data, int compressed_len, char *data, int *data_len) {
+    int ret;
+    z_stream strm;
+
+    // Initialize the zlib stream
+    strm.zalloc = Z_NULL;
+    strm.zfree = Z_NULL;
+    strm.opaque = Z_NULL;
+    strm.avail_in = compressed_len;
+    strm.next_in = (unsigned char *) compressed_data;
+    ret = inflateInit(&strm);
+    if (ret != Z_OK) {
+        return ret;
+    }
+
+    // Decompress the data
+    strm.avail_out = *data_len;
+    strm.next_out = (unsigned char *) data;
+    ret = inflate(&strm, Z_NO_FLUSH);
+    if (ret != Z_STREAM_END) {
+        inflateEnd(&strm);
+        return ret;
+    }
+
+    // Update the decompressed data length
+    *data_len = strm.total_out;
+
+    // Clean up
+    inflateEnd(&strm);
+    return Z_OK;
+}

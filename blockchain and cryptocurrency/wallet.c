@@ -7,8 +7,7 @@
    4) Add block to blockchain, add to blockchain.db
    5) Shas, Verifications, Proofs, Preferences, standardized accorss the network
 
-gcc client.c block.c block_verify.c functions.h sha256/sha256.c -o cockchain.out && ./cockchain.out
-
+gcc -g -o wallet transactions.c wallet.c verifications.c functions.h miner.c blockchain.c -lssl -lcrypto -lsqlite3 -lz
 */
 
 //gcc -g -o wallet transactions.c wallet.c functions.h -lssl -lcrypto -lsqlite3
@@ -95,6 +94,15 @@ int generate_address() {
     int rc;
     char *err_msg = 0;
 
+    struct wallet new_wallet;
+    /*
+        new_wallet.public_key_b64; //use address instead
+        new_wallet.private_key_b64; //secret key used to ensure your identity
+        new_wallet.address; //what you send to get paid or to pay
+        new_wallet.statement; //bank statement of past transactions
+        new_wallet.balance; //how much money you have
+    */
+
     rc = sqlite3_open(DB_WALLET, &db);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
@@ -102,7 +110,9 @@ int generate_address() {
         return 1;
     }
 
-    const char *create_wallet_table = "CREATE TABLE IF NOT EXISTS wallet (address TEXT PRIMARY KEY, private_key_b64 TEXT, public_key_b64 TEXT);";
+    const char * create_wallet_table = "CREATE TABLE IF NOT EXISTS wallet (address TEXT PRIMARY KEY, private_key_b64 TEXT, public_key_b64 TEXT, statement TEXT, balance TEXT);";
+
+//    const char *create_wallet_table = "CREATE TABLE IF NOT EXISTS wallet (address TEXT PRIMARY KEY, private_key_b64 TEXT, public_key_b64 TEXT);";
 
     rc = sqlite3_exec(db, create_wallet_table, 0, 0, &err_msg);
 
@@ -113,6 +123,7 @@ int generate_address() {
         return 1;
     }
     
+
         char private_key_b64[256];
         char public_key_b64[256];
         char address[256];
@@ -123,14 +134,21 @@ int generate_address() {
                 BIGNUM* private_key_ptr = private_key();
                 unsigned char* public_key_ptr = public_key(private_key_ptr);
 
-                get_keys(private_key_ptr, public_key_ptr, private_key_b64, public_key_b64, address);
+/*                get_keys(private_key_ptr, public_key_ptr, private_key_b64, public_key_b64, address);
 
                 printf("Private Key (base64): %s\n", private_key_b64);
                 printf("Public Key (hex): %s\n", public_key_b64);
                 printf("Address: %s\n", address);
+*/
+                get_keys(private_key_ptr, public_key_ptr, new_wallet.private_key_b64, new_wallet.public_key_b64, new_wallet.address);
+
+                printf("Private Key (base64): %s\n", new_wallet.private_key_b64);
+                printf("Public Key (hex): %s\n", new_wallet.public_key_b64);
+                printf("Address: %s\n", new_wallet.address);
 
                 // insert the address into the database
-                snprintf(sql, sizeof(sql), "INSERT INTO wallet (address, private_key_b64, public_key_b64) VALUES ('%s','%s','%s');", address, private_key_b64, public_key_b64);
+                snprintf(sql, sizeof(sql), "INSERT INTO wallet (address, private_key_b64, public_key_b64, balance) VALUES ('%s','%s','%s','%s');", new_wallet.address, new_wallet.private_key_b64, new_wallet.public_key_b64, "0");
+//                snprintf(sql, sizeof(sql), "INSERT INTO wallet (address, private_key_b64, public_key_b64) VALUES ('%s','%s','%s');", address, private_key_b64, public_key_b64);
                 rc = sqlite3_exec(db, sql, 0, 0, &err_msg);
                 if (rc != SQLITE_OK ) {
                     fprintf(stderr, "Failed to insert address: %s\n", err_msg);

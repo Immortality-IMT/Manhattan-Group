@@ -13,6 +13,7 @@
 #include <sqlite3.h>
 #include <openssl/sha.h>
 #include <time.h>
+#include <zlib.h>
 
 #define BLOCK_DATA_SIZE 1024
 
@@ -20,14 +21,23 @@
 #define DB_TRANSACTIONS "DB/transactions.db"
 #define DB_BLOCKCHAIN "DB/blockchain.db"
 
+struct wallet {
+    char private_key_b64[45]; //secret key used to ensure your identity
+    char public_key_b64[65]; //use address instead
+    char address[45]; //what you send to get paid or to pay
+    char statement[256]; //bank statement of past transactions
+    char balance[65]; //how much money you have
+};
+
 // Definition of a transaction that becomes part of a block
 struct transaction {
-    char sender[45]; //44 char
-    char recipient[45]; //44 char
+    char sender[45]; //44 char address
+    char recipient[45]; //44 char address
     double amount;
     double miners_fee;
     double moonshot_fee;
-    char data[4096]; //bytecode for smart_contracts (if used) or a small text message
+    char data[1048577]; //general data variable, bytecode for smart_contracts, journal paper, book, text message, (zlib compressed)
+    int data_type;
     time_t timestamp;
     char r_hex_signature[1024];
     char s_hex_signature[1024];
