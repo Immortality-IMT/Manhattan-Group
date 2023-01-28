@@ -2,7 +2,7 @@
 
 <img align="right" src="https://imt.cx/assets/img/logo/mhg.png" width="200" alt="Manhattan Group Blockchain">
 
-Immortality cryptocurrency has a dedicated blockchain project. Immortality cryptocurrency migration to its own blockchain project is code named the Manhattan Project.
+Immortality cryptocurrency has a dedicated blockchain project. Immortality cryptocurrency migration to its own blockchain project is code named the Manhattan Group.
 
 We are DeSci, watch a video here... https://youtu.be/-DeMklVWNdA
 
