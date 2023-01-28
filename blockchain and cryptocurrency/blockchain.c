@@ -1,5 +1,7 @@
 #include "functions.h"
 
+//gcc -g -o wallet transactions.c wallet.c verifications.c functions.h miner.c blockchain.c -lssl -lcrypto -lsqlite3 -lz
+
 static int callback_count(void *transactions, int argc, char **argv, char **azColName) {
     int *count = (int*)transactions;
     *count = atoi(argv[0]);
@@ -31,7 +33,7 @@ struct block genesis_block;
     }
 
     // Create a table to store the blocks
-    sql = "CREATE TABLE IF NOT EXISTS blocks(block_hash TEXT PRIMARY KEY, previous_hash TEXT, data TEXT, timestamp INTEGER);";
+    sql = "CREATE TABLE IF NOT EXISTS blocks(block_hash TEXT PRIMARY KEY, previous_hash TEXT, block_data TEXT, timestamp INTEGER);";
     rc = sqlite3_exec(db, sql, NULL, 0, &zErrMsg);
     if( rc != SQLITE_OK ) {
         fprintf(stderr, "SQL error: %s\n", zErrMsg);
@@ -50,10 +52,10 @@ struct block genesis_block;
    if (row_count == 0) {
         // Insert the genesis block into the table
         time_t now = time(NULL);
-        genesis_block.timestamp = now;
+        genesis_block.timestamp = now - 1;
 
         sqlite3_stmt *stmt;
-        sqlite3_prepare_v2(db, "INSERT INTO blocks (block_hash, previous_hash, data, timestamp) VALUES (?,?,?,?)", -1, &stmt, NULL);
+        sqlite3_prepare_v2(db, "INSERT INTO blocks (block_hash, previous_hash, block_data, timestamp) VALUES (?,?,?,?)", -1, &stmt, NULL);
 
         sqlite3_bind_text(stmt, 1, genesis_block.block_hash, strlen(genesis_block.block_hash), SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 2, genesis_block.previous_hash, strlen(genesis_block.previous_hash), SQLITE_TRANSIENT);

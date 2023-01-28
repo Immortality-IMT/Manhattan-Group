@@ -12,8 +12,11 @@
 #include <openssl/ssl.h>
 #include <sqlite3.h>
 #include <openssl/sha.h>
+#include <openssl/bio.h>
 #include <time.h>
 #include <zlib.h>
+
+#define CHUNK 16384
 
 #define BLOCK_DATA_SIZE 1024
 
@@ -42,6 +45,7 @@ struct transaction {
     char r_hex_signature[1024];
     char s_hex_signature[1024];
     //char input_transactions[50][256]; //a transaction can include multiple inputs, each of which is the output of a previous transaction.
+    int confirmed; // the status of the transaction
     char txid[65]; //64-character hexadecimal string calculated using the SHA-256 cryptographic hash function.
 };
 
@@ -80,11 +84,13 @@ int main();
 int create_transaction();
 void sign_transaction(const char *sender_address, const char *receiver_address, int amount, const char *private_key_b64, char **r_hex, char **s_hex);
 void get_txid(struct transaction* tx);
+int compress_data(const char *data, int data_len, char **compressed_data, int *compressed_len);
+int decompress_data(const char *compressed_data, int compressed_len, char **decompressed_data, int *decompressed_data_len);
 
 //miner.c
 struct block create_block(void);
 char* get_previous_hash(void);
-char* get_block_hash(struct block new_block);
+void hash_block(struct block *b);
 void add_block(struct block new_block);
 int mine();
 

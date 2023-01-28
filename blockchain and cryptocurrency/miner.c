@@ -39,7 +39,8 @@ struct block create_block(void) { //actually returns a block
             output = realloc(output, len);
             strcat(output, "\n");
         }
-        //printf("%s", output);
+
+        //printf(">>>>>>>>>: %s", output);
     }
 
     sqlite3_free_table(result);
@@ -49,7 +50,7 @@ struct block create_block(void) { //actually returns a block
     new_block.timestamp = time(NULL);
     strcpy(new_block.transaction_bundle, output);
     strcpy(new_block.previous_hash, get_previous_hash());
-    strcpy(new_block.block_hash, get_block_hash(new_block)); //todo: returning random string atm
+    hash_block(&new_block);
 
        free(output);
 
@@ -88,43 +89,56 @@ char* get_previous_hash(void) {
     return previous_hash;
 }
 
+void hash_block(struct block *b) {
+    // Create a SHA-256 context
+    SHA256_CTX ctx;
+    SHA256_Init(&ctx);
 
-/* alphabet: [a-z0-9] */
-const char alphabet[] = "abcdefghijklmnopqrstuvwxyz0123456789";
-int intN(int n) { return rand() % n; }
+    // Hash the previous hash, the transaction bundle, and the timestamp
+    SHA256_Update(&ctx, b->previous_hash, sizeof(b->previous_hash));
+    SHA256_Update(&ctx, b->transaction_bundle, sizeof(b->transaction_bundle));
+    SHA256_Update(&ctx, &b->timestamp, sizeof(b->timestamp));
 
-char *randomString(int len) {
-  char *rstr = malloc((len + 1) * sizeof(char));
-  int i;
-  for (i = 0; i < len; i++) {
-    rstr[i] = alphabet[intN(strlen(alphabet))];
-  }
-  rstr[len] = '\0';
-  return rstr;
-}
-
-char* get_block_hash(struct block new_block) {
-/*
+    // Finalize the hash and store it in the block's block_hash field
     unsigned char hash[SHA256_DIGEST_LENGTH];
-    char input[sizeof(new_block.timestamp) + sizeof(new_block.transaction_bundle) + sizeof(new_block.previous_hash)];
-    sprintf(input, "%d%s%s", new_block.timestamp, new_block.transaction_bundle, new_block.previous_hash);
+    SHA256_Final(hash, &ctx);
 
-    SHA256_CTX sha256;
-    SHA256_Init(&sha256);
-    SHA256_Update(&sha256, input, strlen(input));
-    SHA256_Final(hash, &sha256);
+    // Create a BIO for hexadecimal conversion
+    BIO *bio, *b64;
+    b64 = BIO_new(BIO_f_base64());
+    bio = BIO_new(BIO_s_mem());
+    bio = BIO_push(b64, bio);
+    BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
+    BIO_write(bio, hash, sizeof(hash));
+    BIO_flush(bio);
 
-    *output = (char*)malloc(sizeof(hash) + 1);
-    int i;
-    for(i = 0; i < SHA256_DIGEST_LENGTH; i++)
-        sprintf(*output + (i * 2), "%02x", hash[i]);
-    (*output)[SHA256_DIGEST_LENGTH*2] = 0;
-*/
+    // Get the hexadecimal string from the BIO
+    char *hex_str;
+    int len = BIO_get_mem_data(bio, &hex_str);
+    memcpy(b->block_hash, hex_str, len);
+    b->block_hash[len] = '\0';
 
-    char* str = randomString(20);
-    
-    return str;
+    // Clean up
+    BIO_free_all(bio);
 }
+
+/*
+void hash_block(struct block *b) {
+    // Create a SHA-256 context
+    SHA256_CTX ctx;
+    SHA256_Init(&ctx);
+
+    // Hash the previous hash, the transaction bundle, and the timestamp
+    SHA256_Update(&ctx, b->previous_hash, sizeof(b->previous_hash));
+    SHA256_Update(&ctx, b->transaction_bundle, sizeof(b->transaction_bundle));
+    SHA256_Update(&ctx, &b->timestamp, sizeof(b->timestamp));
+
+    // Finalize the hash and store it in the block's block_hash field
+    SHA256_Final((unsigned char *) b->block_hash, &ctx);
+
+    printf(">:%s", b->block_hash);
+
+}*/
 
 void add_block(struct block new_block) {
 
@@ -145,7 +159,7 @@ void add_block(struct block new_block) {
         //exit(1);
     }
 
-    char *sql = "INSERT INTO blocks (block_hash, previous_hash, data, timestamp) VALUES (?, ?, ?, ?);";
+    char *sql = "INSERT INTO blocks (block_hash, previous_hash, block_data, timestamp) VALUES (?, ?, ?, ?);";
 
     sqlite3_stmt *stmt;
     rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);

@@ -1,5 +1,7 @@
 #include "functions.h"
 
+//gcc -g -o wallet transactions.c wallet.c verifications.c functions.h miner.c blockchain.c -lssl -lcrypto -lsqlite3 -lz
+
 int create_transaction() {
 
     struct transaction new_transaction;
@@ -17,9 +19,8 @@ int create_transaction() {
         return 1;
     }
 
-    char *create_table_query = "CREATE TABLE IF NOT EXISTS transactions (txid TEXT PRIMARY KEY, sender TEXT, recipient TEXT, amount REAL, miners_fee REAL, moonshot_fee REAL, data TEXT, data_type INTEGER, timestamp DATETIME, r_hex_signature TEXT, s_hex_signature TEXT);";
+    char *create_table_query = "CREATE TABLE IF NOT EXISTS transactions (txid TEXT PRIMARY KEY, sender TEXT, recipient TEXT, amount REAL, miners_fee REAL, moonshot_fee REAL, data TEXT, data_type INTEGER, timestamp DATETIME, r_hex_signature TEXT, s_hex_signature TEXT, confirmed INTEGER);";
 
-//    char *create_table_query = "CREATE TABLE IF NOT EXISTS transactions (txid TEXT PRIMARY KEY, sender TEXT, recipient TEXT, amount REAL, miners_fee REAL, moonshot_fee REAL, data TEXT, timestamp DATETIME, r_hex_signature TEXT, s_hex_signature TEXT);";
     rc = sqlite3_exec(db, create_table_query, 0, 0, &err_msg);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "SQL error: %s\n", err_msg);
@@ -28,13 +29,13 @@ int create_transaction() {
         return 1;
     }
 
-    printf("Enter sender address: ");
-    scanf("%127s", new_transaction.sender);
+    printf("Enter sender address: "); getchar();
+    fgets(new_transaction.sender, sizeof(new_transaction.sender), stdin);
 
-    printf("Enter recipient address: ");
-    scanf("%127s", new_transaction.recipient);
+    printf("Enter recipient address: "); getchar();
+    fgets(new_transaction.recipient, sizeof(new_transaction.recipient), stdin);
 
-    printf("Enter amount: ");
+    printf("Enter amount: "); getchar();
     scanf("%lf", &new_transaction.amount);
 
     printf("Enter transaction fee: ");
@@ -43,14 +44,48 @@ int create_transaction() {
     printf("Enter moonshot fee: ");
     scanf("%lf", &new_transaction.moonshot_fee);
 
-    printf("Enter data (smart contract or a text description of the transaction) : ");
-    scanf("%s", new_transaction.data);
+    printf("Enter data (smart contract or a text description of the transaction) : "); getchar();
+    fgets(new_transaction.data, sizeof(new_transaction.data), stdin);
+
+    /*
+    char *data = NULL;
+    size_t data_len = 0;
+    printf("Enter data (smart contract or a text description of the transaction) : "); getchar();
+    getline(&data, &data_len, stdin);
+    data_len = strlen(data);
+    if (data[data_len-1] == '\n') {
+        data[data_len-1] = '\0';
+    }*/
 
     printf("What is this data? (1 text, 2 smart contract, 3 image...) : ");
     scanf("%d", &new_transaction.data_type);
 
     new_transaction.timestamp = time(NULL);
 
+    //new_transaction.confirmed = 0;
+
+/* Can compress the data field to huffman encoding
+
+    char *compressed_data = (char *) malloc(CHUNK);
+    int compressed_len = 0;
+    int ret = compress_data(data, data_len, &compressed_data, &compressed_len);
+    if (ret != 0) {
+        printf("Failed to compress data\n");
+        return 1;
+    }
+
+    char *decompressed_data = (char *) malloc(CHUNK);
+    int decompressed_data_len = 0;
+    ret = decompress_data(compressed_data, compressed_len, &decompressed_data, &decompressed_data_len);
+    if (ret != 0) {
+        printf("Failed to decompress data\n");
+        return 1;
+    }
+
+    printf("Original data: %s\n", data);
+    printf("Compressed data: %s\n", compressed_data);
+    printf("Decompressed data: %s\n", decompressed_data);
+*/
 /*
     struct tm* timeinfo = localtime(&now);
     char timestamp[32];
@@ -93,7 +128,7 @@ int create_transaction() {
 
 /* Put into the transaction pool, send it, broadcast to the network, they perform verification and block it up... */
 
-    int ret = snprintf(sql, sizeof(sql), "INSERT INTO transactions (txid, sender, recipient, amount, miners_fee, moonshot_fee, data, data_type, timestamp, r_hex_signature, s_hex_signature) VALUES ('%s', '%s', '%s', %f, %f, %f, '%s', '%d', %ld, '%s', '%s');", new_transaction.txid, new_transaction.sender, new_transaction.recipient, new_transaction.amount, new_transaction.miners_fee, new_transaction.moonshot_fee, new_transaction.data, new_transaction.data_type, new_transaction.timestamp, new_transaction.r_hex_signature, new_transaction.s_hex_signature);
+    int ret = snprintf(sql, sizeof(sql), "INSERT INTO transactions (txid, sender, recipient, amount, miners_fee, moonshot_fee, data, data_type, timestamp, r_hex_signature, s_hex_signature, confirmed) VALUES ('%s', '%s', '%s', %f, %f, %f, '%s', '%d', %ld, '%s', '%s', '%d');", new_transaction.txid, new_transaction.sender, new_transaction.recipient, new_transaction.amount, new_transaction.miners_fee, new_transaction.moonshot_fee, new_transaction.data, new_transaction.data_type, new_transaction.timestamp, new_transaction.r_hex_signature, new_transaction.s_hex_signature, new_transaction.confirmed);
 
     rc = sqlite3_open(DB_TRANSACTIONS, &db);
     if (rc != SQLITE_OK) {
@@ -107,6 +142,8 @@ int create_transaction() {
         sqlite3_free(err_msg);
     }
 
+    //free(compressed_data);
+    //free(decompressed_data);
     sqlite3_close(db);
 }
 
@@ -144,34 +181,6 @@ void sign_transaction(const char *sender_address, const char *receiver_address, 
     //printf("Sign Signature: %s:%s\n", *r_hex, *s_hex);
 }
 
-/*
-void get_txid(struct transaction* tx) {
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256_CTX sha256;
-    // initialize the SHA256 context
-    SHA256_Init(&sha256);
-    // update the context with the variables of the struct
-    size_t sender_size = strlen(tx->sender);
-    SHA256_Update(&sha256, tx->sender, sender_size);
-    size_t recipient_size = strlen(tx->recipient);
-    SHA256_Update(&sha256, tx->recipient, recipient_size);
-    size_t amount_size = sizeof(tx->amount);
-    SHA256_Update(&sha256, &tx->amount, amount_size);
-    size_t timestamp_size = sizeof(tx->timestamp);
-    SHA256_Update(&sha256, &tx->timestamp, timestamp_size);
-    // finalize the hash
-    SHA256_Final(hash, &sha256);
-    // double SHA-256
-    SHA256_Init(&sha256);
-    SHA256_Update(&sha256, hash, SHA256_DIGEST_LENGTH);
-    SHA256_Final(hash, &sha256);
-    int i;
-    for(i = 0; i < SHA256_DIGEST_LENGTH; i++) {
-    sprintf(tx->txid + (i * 2), "%02x", hash[i]);
-    }
-}*/
-
-
 void get_txid(struct transaction* tx) {
 
     unsigned char hash[SHA256_DIGEST_LENGTH];
@@ -190,104 +199,45 @@ void get_txid(struct transaction* tx) {
 }
 
 /*
-void get_txid(struct transaction* tx) {
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256_CTX sha256;
-    SHA256_Init(&sha256);
-    SHA256_Update(&sha256, (unsigned char*)tx->sender, strlen(tx->sender));
-    SHA256_Update(&sha256, (unsigned char*)tx->recipient, strlen(tx->recipient));
-    SHA256_Update(&sha256, (unsigned char*)&tx->amount, sizeof(tx->amount));
-    SHA256_Update(&sha256, (unsigned char*)&tx->timestamp, sizeof(tx->timestamp));
-    SHA256_Final(hash, &sha256);
-    //double SHA-256
-    SHA256_Init(&sha256);
-    SHA256_Update(&sha256, hash, SHA256_DIGEST_LENGTH);
-    SHA256_Final(hash, &sha256);
-    int i;
-    for(i = 0; i < SHA256_DIGEST_LENGTH; i++)
-        sprintf(tx->txid + (i * 2), "%02x", hash[i]);
-}
-*/
-
-
-/*
 Compress data, used for the transaction variable data[1mB] which holds any info, text, iamges and including smart_contract data.
-
-char data[] = "Hello World!";
-int data_len = sizeof(data);
-
-char compressed_data[100];
-int compressed_len;
-
-compress_data(data, data_len, compressed_data, &compressed_len);
-
-char decompressed_data[100];
-int decompressed_data_len;
-
-decompress_data(compressed_data, compressed_len, decompressed_data, &decompressed_data_len);
 */
 
-int compress_data(const char *data, int data_len, char *compressed_data, int *compressed_len) {
-    int ret;
+int compress_data(const char *data, int data_len, char **compressed_data, int *compressed_len) {
     z_stream strm;
-
-    // Initialize the zlib stream
     strm.zalloc = Z_NULL;
     strm.zfree = Z_NULL;
     strm.opaque = Z_NULL;
-    ret = deflateInit(&strm, Z_DEFAULT_COMPRESSION);
-    if (ret != Z_OK) {
-        return ret;
-    }
+    deflateInit(&strm, Z_DEFAULT_COMPRESSION);
 
-    // Compress the data
     strm.avail_in = data_len;
     strm.next_in = (unsigned char *) data;
-    strm.avail_out = *compressed_len;
-    strm.next_out = (unsigned char *) compressed_data;
-    ret = deflate(&strm, Z_FINISH);
-    if (ret != Z_STREAM_END) {
-        deflateEnd(&strm);
-        return ret;
-    }
 
-    // Update the compressed data length
+    strm.avail_out = CHUNK;
+    strm.next_out = (unsigned char *) *compressed_data;
+
+    deflate(&strm, Z_FINISH);
     *compressed_len = strm.total_out;
-
-    // Clean up
     deflateEnd(&strm);
-    return Z_OK;
+    return 0;
 }
 
-// Decompress data
-int decompress_data(const char *compressed_data, int compressed_len, char *data, int *data_len) {
-    int ret;
+int decompress_data(const char *compressed_data, int compressed_len, char **decompressed_data, int *decompressed_data_len) {
     z_stream strm;
-
-    // Initialize the zlib stream
     strm.zalloc = Z_NULL;
     strm.zfree = Z_NULL;
     strm.opaque = Z_NULL;
+    strm.avail_in = 0;
+    strm.next_in = Z_NULL;
+    inflateInit(&strm);
+
     strm.avail_in = compressed_len;
     strm.next_in = (unsigned char *) compressed_data;
-    ret = inflateInit(&strm);
-    if (ret != Z_OK) {
-        return ret;
-    }
 
-    // Decompress the data
-    strm.avail_out = *data_len;
-    strm.next_out = (unsigned char *) data;
-    ret = inflate(&strm, Z_NO_FLUSH);
-    if (ret != Z_STREAM_END) {
-        inflateEnd(&strm);
-        return ret;
-    }
+    strm.avail_out = CHUNK;
+    strm.next_out = (unsigned char *) *decompressed_data;
 
-    // Update the decompressed data length
-    *data_len = strm.total_out;
-
-    // Clean up
+    inflate(&strm, Z_NO_FLUSH);
+    *decompressed_data_len = strm.total_out;
     inflateEnd(&strm);
-    return Z_OK;
+    return 0;
 }

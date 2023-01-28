@@ -112,8 +112,6 @@ int generate_address() {
 
     const char * create_wallet_table = "CREATE TABLE IF NOT EXISTS wallet (address TEXT PRIMARY KEY, private_key_b64 TEXT, public_key_b64 TEXT, statement TEXT, balance TEXT);";
 
-//    const char *create_wallet_table = "CREATE TABLE IF NOT EXISTS wallet (address TEXT PRIMARY KEY, private_key_b64 TEXT, public_key_b64 TEXT);";
-
     rc = sqlite3_exec(db, create_wallet_table, 0, 0, &err_msg);
 
     if (rc != SQLITE_OK ) {
@@ -122,7 +120,6 @@ int generate_address() {
         sqlite3_close(db);
         return 1;
     }
-    
 
         char private_key_b64[256];
         char public_key_b64[256];
@@ -185,14 +182,49 @@ void print_table(const char* db_name, const char* table_name) {
     sqlite3_close(db);
 }
 
+/*
 static int callback(void *data, int argc, char **argv, char **col_name) {
     for (int i = 0; i < argc; i++) {
         printf("%s = %s\n", col_name[i], argv[i] ? argv[i] : "NULL");
     }
     printf("\n");
     return 0;
-}
+}*/
 
+static int callback(void *data, int argc, char **argv, char **col_name) {
+
+/* To use huffman coding compress, to decompress before echo out
+int decompressed_data_len = 0;
+
+    for (int i = 0; i < argc; i++) {
+        if (strcmp(col_name[i], "data") == 0) {
+
+            char *decompressed_data = (char *) malloc(CHUNK);
+            memset(decompressed_data, 0, CHUNK); //clear the mem so no jink chars are present
+
+            int decompressed_data_len = 0;
+            int ret = decompress_data(argv[i], strlen(argv[i]), &decompressed_data, &decompressed_data_len);
+            if (ret != 0) {
+                printf("Failed to decompress data\n");
+                return 1;
+            }
+
+            printf("%s = %s\n", col_name[i], decompressed_data);
+            free(decompressed_data);
+
+        } else {
+            printf("%s = %s\n", col_name[i], argv[i] ? argv[i] : "NULL");
+        }
+    }
+*/
+
+    for (int i = 0; i < argc; i++) {
+        printf("%s = %s\n", col_name[i], argv[i] ? argv[i] : "NULL");
+    }
+
+    printf("\n");
+    return 0;
+}
 
 int main() {
 
