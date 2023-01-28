@@ -1,6 +1,6 @@
 # Manhattan Group (DeSci Blockchain)
 
-<img align="right" src="https://imt.cx/assets/img/logo/manhattan.png" width="200" alt="Manhattan Group Blockchain">
+<img align="right" src="https://imt.cx/assets/img/logo/mhg.png" width="200" alt="Manhattan Group Blockchain">
 
 Immortality cryptocurrency has a dedicated blockchain project. Immortality cryptocurrency migration to its own blockchain project is code named the Manhattan Project.
 
