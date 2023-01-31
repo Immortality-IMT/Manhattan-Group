@@ -20,7 +20,7 @@ DeSci seeks to fund future technologies with blockchain and crypto. Technologies
 
 ```We suggest doubling the miner's block reward and transaction fee to fund deSci. The miner is restricted to donate the extra block reward to watershed technologies. Other methods have been proposed, such as Quadratic Funding.```
 
-```With the right vicious circle agreement, a successful moonshot potentially injects significant capital into the ecosystem```
+```With a virtuous circle agreement, a successful moonshot could injects significant capital into the ecosystem```
 
 If you are interested in being part of the moderation of the project, join and discuss blockchain at our telegram https://t.me/immortality_IMT
 
