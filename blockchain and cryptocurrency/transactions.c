@@ -1,6 +1,7 @@
 #include "functions.h"
 
-//gcc -g -o wallet transactions.c wallet.c verifications.c functions.h miner.c blockchain.c -lssl -lcrypto -lsqlite3 -lz
+//Compile with...
+//    gcc -g -o wallet transactions.c wallet.c verifications.c functions.h miner.c blockchain.c base58.c keccak.c -lssl -lcrypto -lsqlite3 -lz
 
 int create_transaction() {
 
@@ -147,38 +148,40 @@ int create_transaction() {
     sqlite3_close(db);
 }
 
-void sign_transaction(const char *sender_address, const char *receiver_address, int amount, const char *private_key_b64, char **r_hex, char **s_hex) {
-    //Decode the private key from base64
-    BIO *b64 = BIO_new(BIO_f_base64());
-    BIO *bmem = BIO_new_mem_buf(private_key_b64, -1);
-    bmem = BIO_push(b64, bmem);
-    unsigned char private_key[256];
-    int private_key_len = BIO_read(bmem, private_key, sizeof(private_key));
+void sign_transaction(const char *sender_address, const char *receiver_address, int amount, const char *private_key_hex, char **r_hex, char **s_hex) {
 
-    EC_KEY *key = EC_KEY_new_by_curve_name(NID_secp256k1);
+    // convert private key from hex to BIGNUM
     BIGNUM *private_key_bn = BN_new();
-    BN_bin2bn(private_key, private_key_len, private_key_bn);
+    BN_hex2bn(&private_key_bn, private_key_hex);
+
+    // create EC_KEY from private key
+    EC_KEY *key = EC_KEY_new_by_curve_name(NID_secp256k1);
     EC_KEY_set_private_key(key, private_key_bn);
 
-    //Build the message to sign
-    char message[256];
-    sprintf(message, "%s:%s:%d", sender_address, receiver_address, amount);
+    // hash the message with SHA256
+    unsigned char message_digest[SHA256_DIGEST_LENGTH];
+    SHA256_CTX ctx;
+    SHA256_Init(&ctx);
+    SHA256_Update(&ctx, sender_address, strlen(sender_address));
+    SHA256_Update(&ctx, ":", 1);
+    SHA256_Update(&ctx, receiver_address, strlen(receiver_address));
+    SHA256_Update(&ctx, ":", 1);
+    char amount_str[11];
+    snprintf(amount_str, sizeof(amount_str), "%d", amount);
+    SHA256_Update(&ctx, amount_str, strlen(amount_str));
+    SHA256_Final(message_digest, &ctx);
 
-    //Sign the message
-    ECDSA_SIG *signature = ECDSA_do_sign((unsigned char *)message, strlen(message), key);
- 
-    //Convert the signature to hex
+    // sign the hash
+    ECDSA_SIG *signature = ECDSA_do_sign(message_digest, sizeof(message_digest), key);
+
+    // convert r and s values to hex
     *r_hex = BN_bn2hex(ECDSA_SIG_get0_r(signature));
     *s_hex = BN_bn2hex(ECDSA_SIG_get0_s(signature));
 
-    //Free memory
-    BN_free(private_key_bn);
+    // free memory
     EC_KEY_free(key);
+    BN_free(private_key_bn);
     ECDSA_SIG_free(signature);
-    BIO_free_all(bmem);
-
-    //Return the hex signature
-    //printf("Sign Signature: %s:%s\n", *r_hex, *s_hex);
 }
 
 void get_txid(struct transaction* tx) {
