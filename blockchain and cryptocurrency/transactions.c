@@ -35,7 +35,7 @@ int create_transaction() {
     printf("Enter recipient address: "); getchar();
     fgets(new_transaction.recipient, sizeof(new_transaction.recipient), stdin);
 
-    printf("Enter amount: "); getchar();
+    printf("Enter amount: ");
     scanf("%lf", &new_transaction.amount);
 
     printf("Enter transaction fee: ");
@@ -105,7 +105,7 @@ int create_transaction() {
         sqlite3_close(db);
         return -1;
     }
-    snprintf(sql, sizeof(sql), "SELECT private_key_b64 FROM wallet WHERE address = %s;", new_transaction.sender);
+    snprintf(sql, sizeof(sql), "SELECT private_key FROM wallet WHERE address = %s;", new_transaction.sender);
     sqlite3_stmt *stmt;
     sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
     sqlite3_bind_text(stmt, 1, new_transaction.sender, -1, SQLITE_STATIC);
