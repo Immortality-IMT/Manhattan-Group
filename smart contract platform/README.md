@@ -13,9 +13,10 @@ Process of smart contract functionality
 6. The smart-contract is a transaction and undergoes traditional blockchain processing, broadcasted, mined, blocked and added to blockchain.
 7. Once the transaction is mined, the smart contract is deployed and is now accessible at the contract address provided.
 
-Solidity Compiler
+Solc - Compilter to code smart contracts
+----------------------------------------
 
-https://imt.cx/solc
+Solidity Compiler - https://imt.cx/solc
 
 Bytecode for HelloWorld
 -----------------------
