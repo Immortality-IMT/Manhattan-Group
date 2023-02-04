@@ -5,18 +5,20 @@ gcc -o vm vm.c -lm
 Process of smart contract functionality
 ---------------------------------------
 
-1. Write the contract in Python. For example vyper as a compiler solution - https://vyper.readthedocs.io/en/stable/
+1. Write the contract in Solidity or Python. for example vyper as a compiler solution - https://vyper.readthedocs.io/en/stable/
 2. Convert the Python into bytecode. Convert to the virtual machine compatible format which is stripped down version of bytecode. 
-3. Compression can also be implemented. Such as https://github.com/Arachnid/evmdis & https://github.com/ConsenSys/mythril
+3. Compression can also be implemented on the transaction. Such as https://github.com/Arachnid/evmdis & https://github.com/ConsenSys/mythril
 4. Put the bytecode onto the blockchain as a transaction and bytecode as data. A unique contract address is returned. 
 5. Every transaction has a data field for including smart contract bytecode or storing general data on blockchain.
 6. The smart-contract is a transaction and undergoes traditional blockchain processing, broadcasted, mined, blocked and added to blockchain.
 7. Once the transaction is mined, the smart contract is deployed and is now accessible at the contract address provided.
 
-Solc - Compilter to code smart contracts
+Solc - Compiler to code smart contracts
 ----------------------------------------
 
 Solidity Compiler - https://imt.cx/solc
+
+The compiler here produces bytecode that can be fed to vm.c for testing purposes.
 
 Bytecode for HelloWorld
 -----------------------
@@ -25,6 +27,18 @@ Bytecode for HelloWorld
 EVM Bytecode for HelloWorld
 ---------------------------
 0x60606040526040805190810160405280600c81526020017f48656c6c6f2c20576f726c642100000000000000000000000000000000000000008152506000908051906020019061004f929190610056565b50610105565b8280546001816001161561
+
+Solidity Bytecode for HelloWorld
+--------------------------------
+608060405234801561001057600080fd5b5060e58061001f6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c8063c605f76c14602d575b600080fd5b604080518082018252600d81526c48656c6c6f2c20576f726c642160981b60208201529051605a91906063565b60405180910390f35b600060208083528351808285015260005b81811015608e578581018301518582016040015282016074565b506000604082860101526040601f19601f830116850101925050509291505056fea26469706673582212205e06adeae992ded0cd6300f2a129793cc19fcf3f6890b24cb868ccdcdb5e179464736f6c63430008120033
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+contract MyContract {
+    function helloWorld() public pure returns (string memory) {
+        return "Hello, World!";
+    }
+}
 
 https://ethervm.io/decompile
 
