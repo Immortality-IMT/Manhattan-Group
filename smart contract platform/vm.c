@@ -3,7 +3,7 @@ C code defines a virtual machine to execute opcodes, specifically for smart cont
 
 Compiler with: gcc -g -o vm vm.c -lm
 
-/** Note: The instruction set is not implemented **/
+/// Note: The instruction set is not implemented ///
 
 https://imt.cx/solc/
 https://ethereum.org/en/developers/docs/evm/opcodes/
