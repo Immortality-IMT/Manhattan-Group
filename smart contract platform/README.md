@@ -16,6 +16,11 @@ Process of smart contract functionality
 9. Primarily, it is the balance that is all important.
 10. Functions are executed by vm.c
 
+VM runs bytecode which are hex encoded values, they correspond to opcode instruction set, not x86 but a more financial based CPU instruction set. There is no need to decode the hex to get the opcode, mapping the 2byte hex value to the opcode in a swtich case is enough, e.g. Hex: 01 is always ADD...
+
+All the codes are here, the stack column is the hex values and every instruction must be coded.
+https://ethereum.org/en/developers/docs/evm/opcodes/
+
 Solc - Compiler to code smart contracts
 ----------------------------------------
 Solidity Compiler - https://imt.cx/solc - The compiler produces bytecode that can be fed to vm.c for testing purposes.
