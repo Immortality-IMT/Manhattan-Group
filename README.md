@@ -6,7 +6,7 @@ Immortality cryptocurrency has a dedicated blockchain project. Immortality crypt
 
 We are DeSci, watch a video here... https://youtu.be/-DeMklVWNdA
 
-DeSci seeks to fund future technologies with blockchain and crypto. Technologies that unlock technologies, watershed technologies such as AGI, would cause a universal upgrade.
+Along with bankless financial infrastructure, DeSci seeks to fund future technologies with blockchain and crypto. Technologies that unlock technologies, watershed technologies such as AGI, would cause a universal upgrade.
 
 #### Some projects that DeSci should prioritize
 - Open source A.I. such as GPT-Neo and GPT-J. Unsantized, uncensored, open source AGI.
