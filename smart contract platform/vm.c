@@ -15,11 +15,15 @@ https://github.com/crytic/evm-opcodes
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 #include <limits.h>
 #include <math.h>
 
 #define MAX_STACK_SIZE 1024 //to be removed in dynamic allocation
 #define MAX_MEMORY_SIZE 256000 //to be removed
+
+typedef unsigned long long uint256_t[4];
+
 
 typedef struct {
     int stack_pointer; //keep track of the current position in the stack array
@@ -49,6 +53,10 @@ typedef struct {
   int storage[MAX_MEMORY_SIZE];
 
 } evm_state;
+
+//void revert(unsigned char* ost, unsigned int len);
+//bool static_call(uint32_t gas, uint32_t addr, unsigned char* arg_ost, uint32_t arg_len, unsigned char* ret_ost, uint32_t ret_len);
+//uint32_t read_next_u32(state_t* state);
 
 void load_contract_from_file(const char * file_path, evm_state * state) {
 
@@ -88,6 +96,11 @@ void load_contract_from_file(const char * file_path, evm_state * state) {
   fclose(fp);
 }
 
+/**********
+Code assumes the stack stores integers and performs integer arithmetic, 
+A conversion function is required, as the stack stores hexadecimal values
+**********/
+
 void run_evm(evm_state * state) {
   state->pc = 0;
 
@@ -103,27 +116,43 @@ void run_evm(evm_state * state) {
 
     printf("%s - ", opcode);
 
+/* 
+   read the first hex value to find the case
+   read the second hex value to result in the hex value case
+   C switch case is restricted to integers/literals not 2 char (hex) conditions
+   Breaking up the hex is better than using countless if elses
+*/
+
    switch (opcode[0]) { //unsigned char opcode
       case '0': //[0] first hex literal, then nested [1] second 00, tolower ff
 
 
         switch (opcode[1]) { //STOP
-            case '0': // STOP
-                printf("STOP\n");
+            case '0': // STOP - halt execution	
+                printf("STOP instruction\n");
                 return;
             break;
             case '1': // ADD 	Addition operation
-                b = state->stack[--state->stack_pointer];
-                a = state->stack[--state->stack_pointer];
-                if (state->stack_pointer >= 0 && state->stack_pointer < MAX_STACK_SIZE) {
-                state->stack[state->stack_pointer++] = a + b;
-                printf("a: %d, b: %d, stack: %d\n", a, b, state->stack[state->stack_pointer - 1]);
-                }
+                // get the two values from the stack
+                a = state->stack[state->stack_pointer - 2];
+                b = state->stack[state->stack_pointer - 1];
+
+                // perform the addition and store the result in the stack
+                state->stack[state->stack_pointer - 2] = a + b;
+
+                // update the stack pointer
+                state->stack_pointer--;
             break;
             case '2': // MUL 	Multiplication operation
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = a * b;
+                // Pop two values from the stack
+                b = state->stack[--state->stack_pointer];
+                a = state->stack[--state->stack_pointer];
+
+                // Perform unsigned integer multiplication
+                int result = (unsigned int)a * (unsigned int)b;
+
+                // Push the result back to the stack
+                state->stack[state->stack_pointer++] = result;
             break;
             case '3': // SUB 	Subtraction operation
                 a = state -> stack[--state -> stack_pointer];
@@ -131,30 +160,45 @@ void run_evm(evm_state * state) {
                 state -> stack[state -> stack_pointer++] = a - b;
             break;
             case '4': // DIV 	Integer division operation
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = a / b;
+                // Pop the two values from the stack
+                /*uint256_t*/ b = state->stack[state->stack_pointer--];
+                /*uint256_t*/ a = state->stack[state->stack_pointer--];
+
+                // Perform the division operation
+                /*uint256_t*/ result = a / b;
+
+                // Push the result back to the stack
+                state->stack[++state->stack_pointer] = result;
             break;
             case '5': // SDIV 	Signed integer division operation (truncated)
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = ((a ^ INT_MIN) / (b ^ INT_MIN)) ^ INT_MIN;
+                a = state->stack[--state->stack_pointer];
+                b = state->stack[--state->stack_pointer];
+
+                // Check for division by zero
+                if (b == 0) {
+                // Handle division by zero error
+                // ...
+                }
+
+                // Perform signed division and push the result back onto the stack
+                state->stack[state->stack_pointer++] = (a / b);
             break;
             case '6': // MOD 	Modulo remainder operation
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = a % b;
+                //pop 2 values from the stack and perform a%b and push the result
+                b = state->stack[--state->stack_pointer];
+                a = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = a % b;
             break;
             case '7': // SMOD 	Signed modulo remainder operation
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = ((a % b) + b) % b;
+                b = state->stack[--state->stack_pointer];
+                a = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = (a >= 0) ? (a % b) : ((b - 1 - ((-a - 1) % b)) % b);
             break;
             case '8': // ADDMOD 	Modulo addition operation
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                c = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = (a + b) % c;
+                c = state->stack[--state->stack_pointer];
+                b = state->stack[--state->stack_pointer];
+                a = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = (a + b) % c;
             break;
             case '9': // MULMOD 	Modulo multiplication operation
                 a = state -> stack[--state -> stack_pointer];
@@ -168,25 +212,28 @@ void run_evm(evm_state * state) {
                 state -> stack[state -> stack_pointer++] = pow(a, b);
             break;
             case 'b': // SIGNEXTEND 	Extend length of two's complement signed integer
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                if ((a < 32) && (b & (1 << (a - 1)))) {
-                    state -> stack[state -> stack_pointer++] = b | (0xffffffff << a);
-                } else {
-                    state -> stack[state -> stack_pointer++] = b;
+                b = state->stack[--state->stack_pointer];
+                int x = state->stack[--state->stack_pointer];
+                if (b < 1 || b > 32) {
+                    state->stack[state->stack_pointer++] = x;
+                    break;
                 }
+                int size_b = b * 8;
+                int mask = (1 << (size_b - 1)) - 1;
+                int sign = x & (1 << (size_b - 1));
+                state->stack[state->stack_pointer++] = sign ? x | ~mask : x & mask;
             break;
-            case 'c': //Unsed/Invalid
-                printf("0C - Unsed/Invalid\n");
+            case 'c': //Unsed-Invalid
+                printf("0C - Unsed-Invalid\n");
             break;
-            case 'd': //Unsed/Invalid
-                printf("0D - Unused/Invalid\n");
+            case 'd': //Unsed-Invalid
+                printf("0D - Unused-Invalid\n");
             break;
-            case 'e': //Unsed/Invalid
-                printf("0E - Unused/Invalid\n");
+            case 'e': //Unsed-Invalid
+                printf("0E - Unused-Invalid\n");
             break;
-            case 'f':  //Unsed/Invalid
-                printf("0F - Unused/Invalid\n");
+            case 'f':  //Unsed-Invalid
+                printf("0F - Unused-Invalid\n");
             break;
         }
 
@@ -197,72 +244,78 @@ void run_evm(evm_state * state) {
 
         switch (opcode[1]) {
             case '0': // LT 	Less-than comparison
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = (a < b) ? 1 : 0;
+                b = state->stack[--state->stack_pointer];
+                a = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = (a < b) ? 1 : 0;
             break;
             case '1':  // GT 	Greater-than comparison
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = (a > b) ? 1 : 0;
+                b = state->stack[--state->stack_pointer];
+                a = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = (a > b) ? 1 : 0;
             break;
             case '2': // SLT 	Signed less-than comparison
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = (a < b) ? 1 : 0;
+                b = state->stack[--state->stack_pointer];
+                a = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = (a < b) ? 1 : 0;
             break;
             case '3':  // SGT 	Signed greater-than comparison
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = (a > b) ? 1 : 0;
+                a = state->stack[--state->stack_pointer];
+                b = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = (a > b) ? 1 : 0;
             break;
             case '4': // EQ 	Equality comparison
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = (a == b) ? 1 : 0;
+                a = state->stack[--state->stack_pointer];
+                b = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = (a == b) ? 1 : 0;
             break;
             case '5': // ISZERO 	Simple not operator
-                a = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = (a == 0) ? 1 : 0;
+                a = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = (a == 0) ? 1 : 0;
             break;
             case '6': // AND 	Bitwise AND operation
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = a & b;
+                a = state->stack[--state->stack_pointer];
+                b = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = a & b;
             break;
             case '7': // OR 	Bitwise OR operation
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = a | b;
+                a = state->stack[--state->stack_pointer];
+                b = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = a | b;
             break;
             case '8': // XOR 	Bitwise XOR operation
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = a ^ b;
+                a = state->stack[--state->stack_pointer];
+                b = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = a ^ b;
             break;
             case '9': // NOT 	Bitwise NOT operation
                 a = state -> stack[--state -> stack_pointer];
                 state -> stack[state -> stack_pointer++] = ~a;
             break;
             case 'a':  // BYTE 	Retrieve single byte from word
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = (b >> (8 * a)) & 0xFF;
+                a = state->stack[--state->stack_pointer];
+                b = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = (b >> (248 - a * 8)) & 0xFF;
             break;
             case 'b': // SHL 	    Shift Left
-                printf("SHL todo\n");
+                a = state->stack[--state->stack_pointer];
+                b = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = b << a;
             break;
             case 'c': // SHR 	    Logical Shift Right
-                printf("SHR todo\n");
+                b = state->stack[--state->stack_pointer];
+                a = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = a >> b;
             break;
             case 'd': // SAR 	    Arithmetic Shift Right
-                printf("SAR todo\n");
+                a = state->stack[--state->stack_pointer];
+                b = state->stack[--state->stack_pointer];
+                state->stack[state->stack_pointer++] = b >> a;
             break;
-            case 'e': //Unsed/Invalid
-                printf("1E - Unused/Invalid\n");
+            case 'e': //Unsed-Invalid
+                printf("1E - Unused-Invalid\n");
             break;
-            case 'f': //Unsed/Invalid
-                printf("1F - Unused/Invalid\n");
+            case 'f': //Unsed-Invalid
+                printf("1F - Unused-Invalid\n");
             break;
         }
 
@@ -272,53 +325,63 @@ void run_evm(evm_state * state) {
 
 
         switch (opcode[1]) {
-            case '0': // KECCAK256 	Compute Keccak-256 hash
-                printf("KECCAK256 todo\n");
+            case '0': // KECCAK256 	Compute Keccak-256 hash (Currently not coded)
+                a = state->stack[--state->stack_pointer];
+                b = state->stack[--state->stack_pointer];
+                u_int8_t *mem = state->memory;
+                unsigned char keccak_res[32];
+
+                //Add implementation for keccak256 function
+                //keccak256(keccak_res, mem + b, a);
+
+                //Push result to stack
+                //memcpy(state->stack + state->stack_pointer, keccak_res, 32);
+                //state->stack_pointer += 32 / sizeof(int);
             break;
             case '1':
-                printf("21 - Unused/Invalid\n");
+                printf("21 - Unused-Invalid\n");
             break;
             case '2':
-                printf("22 - Unused/Invalid\n");
+                printf("22 - Unused-Invalid\n");
             break;
             case '3':
-                printf("23 - Unused/Invalid\n");
+                printf("23 - Unused-Invalid\n");
             break;
             case '4':
-                printf("24 - Unused/Invalid\n");
+                printf("24 - Unused-Invalid\n");
             break;
             case '5':
-                printf("25 - Unused/Invalid\n");
+                printf("25 - Unused-Invalid\n");
             break;
             case '6':
-                printf("26 - Unused/Invalid\n");
+                printf("26 - Unused-Invalid\n");
             break;
             case '7':
-                printf("27 - Unused/Invalid\n");
+                printf("27 - Unused-Invalid\n");
             break;
             case '8':
-                printf("28 - Unused/Invalid\n");
+                printf("28 - Unused-Invalid\n");
             break;
             case '9':
-                printf("29 - Unused/Invalid\n");
+                printf("29 - Unused-Invalid\n");
             break;
             case 'a':
-                printf("2A - Unused/Invalid\n");
+                printf("2A - Unused-Invalid\n");
             break;
             case 'b':
-                printf("2B - Unused/Invalid\n");
+                printf("2B - Unused-Invalid\n");
             break;
             case 'c':
-                printf("2C - Unused/Invalid\n");
+                printf("2C - Unused-Invalid\n");
             break;
             case 'd':
-                printf("2D - Unused/Invalid\n");
+                printf("2D - Unused-Invalid\n");
             break;
             case 'e':
-                printf("2E - Unused/Invalid\n");
+                printf("2E - Unused-Invalid\n");
             break;
             case 'f':
-                printf("2F - Unused/Invalid\n");
+                printf("2F - Unused-Invalid\n");
             break;
         }
 
@@ -328,15 +391,44 @@ void run_evm(evm_state * state) {
 
 
         switch (opcode[1]) {
-            case '0': // ADDRESS 	Get address of currently executing account
-                state -> stack[state -> stack_pointer++] = state -> address;
+            case '0': // ADDRESS 	Get address of currently executing account (Currently not coded)
+                /*uint8_t address[32];
+                  get_address(address); //not coded
+
+                // Push address to stack
+                memcpy(state->stack + state->stack_pointer, address, 32);
+                state->stack_pointer += 32 / sizeof(uint256_t);
+                */
             break;
             case '1': // BALANCE 	Get balance of the given account
+                //These are not instruction set functions and therefore are not coded yet
+                /*
+                uint8_t addr[32];
+                uint256_t balance;
+
+                // Pop address from stack
+                memcpy(addr, state->stack + state->stack_pointer - 32 / sizeof(uint256_t), 32);
+                state->stack_pointer -= 32 / sizeof(uint256_t);
+
+                // TODO: Add implementation for getting balance of address 'addr'
+                balance = get_balance(addr);
+
+                // Push balance to stack
+                memcpy(state->stack + state->stack_pointer, &balance, 32);
+                state->stack_pointer += 32 / sizeof(uint256_t);
+
                 a = state -> stack[--state -> stack_pointer];
                 //TODO: Implement getting balance of given account
+                */
             break;
             case '2': // ORIGIN 	Get execution origination address
-                state -> stack[state -> stack_pointer++] = state -> origin;
+                //uint256_t origin;
+
+                // TODO: Add implementation to get the origin of the transaction
+
+                // Push result to stack
+                //memcpy(state->stack + state->stack_pointer, &origin, 32);
+                //state->stack_pointer += 32 / sizeof(uint256_t);
             break;
             case '3': // CALLER 	Get caller address
                 state -> stack[state -> stack_pointer++] = state -> caller;
@@ -424,26 +516,26 @@ void run_evm(evm_state * state) {
             case '8': // BASEFEE 	Returns the value of the base fee of the current block it is executing in
                 printf("BASEFEE todo\n");
             break;
-            case '9': // Invalid
-                printf("push1\n");
+            case '9': // Unused-Invalid
+                printf("49 Unused-Invalid\n");
             break;
-            case 'a': // PUSH1
-                printf("push1\n");
+            case 'a': // Unused-Invalid
+                printf("4A Unused-Invalid\n");
             break;
-            case 'b': // PUSH1
-                printf("push1\n");
+            case 'b': // Unused-Invalid
+                printf("4B Unused-Invalid\n");
             break;
-            case 'c': // PUSH1
-                printf("push1\n");
+            case 'c': // Unused-Invalid
+                printf("4C Unused-Invalid\n");
             break;
-            case 'd': // PUSH1
-                printf("push1\n");
+            case 'd': // Unused-Invalid
+                printf("4D Unused-Invalid\n");
             break;
-            case 'e': // PUSH1
-                printf("push1\n");
+            case 'e': // Unused-Invalid
+                printf("4E Unused-Invalid\n");
             break;
-            case 'f': // PUSH1
-                printf("push1\n");
+            case 'f': // Unused-Invalid
+                printf("4F Unused-Invalid\n");
             break;
         }
         break; //4
@@ -454,16 +546,23 @@ void run_evm(evm_state * state) {
 
 
             case '0':// POP 	Remove word from stack
-                state -> stack_pointer--;
+                --state->stack_pointer;
+                //state -> stack_pointer--; functionally equivilant
             break;
-            case '1': // MLOAD 	Load word from memory
-                a = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = state -> memory[a];
+            case '1': // MLOAD 	Load word from memory (not working)
+                /* int ost = state->stack[--state->stack_pointer];
+                //uint256_t result;
+                int result;
+                memcpy(result, state->memory + ost, 32);
+                state->stack[state->stack_pointer++] = result;
+                */
             break;
             case '2': // MSTORE 	Save word to memory
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> memory[a] = b;
+            /*
+                int ost = state->stack[--state->stack_pointer];
+                uint256_t val = state->stack[--state->stack_pointer];
+                memcpy(state->memory + ost, &val, 32);
+            */
             break;
             case '3': // MSTORE8 	Save byte to memory
                 a = state -> stack[--state -> stack_pointer];
@@ -500,7 +599,7 @@ void run_evm(evm_state * state) {
                 state -> stack[state -> stack_pointer++] = state -> gas;
             break;
             case 'b': /// JUMPDEST 	Mark a valid destination for jumps
-                //TODO: Implement marking a valid destination for jumps
+                //TODO:  /* This opcode has no effect on the stack or memory, its sole purpose is to mark a valid jump destination. */
             break;
             case 'c': // Invalid
                 printf("Invalid\n");
@@ -522,32 +621,84 @@ void run_evm(evm_state * state) {
         switch (opcode[1]) {
 
 
-            case '0': // 60	PUSH1	3	.	uint8		push 1-byte value onto stack
-                printf("PUSH1 todo\n");
+            case '0': { // 60	PUSH1	3	.	uint8		push 1-byte value onto stack
+                        uint8_t value = state->code[state->pc + 1];
+                        state->stack[++state->stack_pointer] = value;
+                        state->pc += 2;
+
+                        //state->stack[state->stack_pointer++] = state->contract_bytecode[state->pc++];
+                      }
             break;
-            case '1': // 61	PUSH2	3	.	uint16		push 2-byte value onto stack	
-                printf("PUSH2 todo\n");
+            case '1': { // 61	PUSH2	3	.	uint16		push 2-byte value onto stack
+                        uint16_t value = (state->code[state->pc + 1] << 8) | state->code[state->pc + 2];
+                        state->stack[++state->stack_pointer] = value;
+                        state->pc += 3;
+                      }
             break;
-            case '2': // 62	PUSH3	3	.	uint24		push 3-byte value onto stack	
-                printf("PUSH3 todo\n");
+            case '2': { // 62	PUSH3	3	.	uint24		push 3-byte value onto stack	
+                        uint32_t value = 0;
+                        for (int i = 0; i < 3; i++) {
+                            value = (value << 8) | *(state->code + state->pc++);
+                        }
+                        state->stack[state->stack_pointer++] = value;
+                      }
             break;
-            case '3': // 63	PUSH5	3	.	uint40		push 5-byte value onto stack
-                printf("PUSH3 todo\n");
+            case '3': { // 63	PUSH5	3	.	uint40		push 5-byte value onto stack
+                        uint8_t byte1 = state->contract_bytecode[state->pc++];
+                        uint8_t byte2 = state->contract_bytecode[state->pc++];
+                        uint8_t byte3 = state->contract_bytecode[state->pc++];
+                        uint8_t byte4 = state->contract_bytecode[state->pc++];
+
+                        uint32_t value = (byte4 << 24) | (byte3 << 16) | (byte2 << 8) | byte1;
+                        state->stack[state->stack_pointer++] = value;
+                      }
             break;
-            case '4': // 64	PUSH6	3	.	uint48		push 6-byte value onto stack
-                printf("PUSH4 todo\n");
+            case '4': { // 64	PUSH6	3	.	uint48		push 6-byte value onto stack
+                        uint32_t value1 = state->contract_bytecode[state->pc++];
+                        uint32_t value2 = state->contract_bytecode[state->pc++];
+                        uint32_t value3 = state->contract_bytecode[state->pc++];
+                        uint32_t value4 = state->contract_bytecode[state->pc++];
+                        uint32_t pushValue = (value4 << 24) | (value3 << 16) | (value2 << 8) | value1;
+                        state->stack[state->stack_pointer++] = pushValue;
+                      }
             break;
-            case '5': // 65	PUSH7	3	.	uint56		push 7-byte value onto stack
-                printf("PUSH5 todo\n");
+            case '5': { // 65	PUSH7	3	.	uint56		push 7-byte value onto stack
+                        uint32_t value1 = state->contract_bytecode[state->pc++];
+                        uint32_t value2 = state->contract_bytecode[state->pc++];
+                        uint32_t value3 = state->contract_bytecode[state->pc++];
+                        uint32_t value4 = state->contract_bytecode[state->pc++];
+                        uint32_t value5 = state->contract_bytecode[state->pc++];
+                        uint64_t pushValue = ((uint64_t)value5 << 32) | ((uint64_t)value4 << 24) | (value3 << 16) | (value2 << 8) | value1;
+                        state->stack[state->stack_pointer++] = pushValue;
+                      }
             break;
-            case '6': // 66	PUSH8	3	.	uint64		push 8-byte value onto stack
-                printf("PUSH6 todo\n");
+            case '6': { // 66	PUSH8	3	.	uint64		push 8-byte value onto stack
+                        uint64_t value = 0;
+                        for (int i = 0; i < 6; i++) {
+                        value |= (uint64_t)state->contract_bytecode[state->pc + i + 1] << (8 * (5 - i));
+                        }
+                        state->stack[state->stack_pointer++] = value;
+                        state->pc += 6;
+                     }
             break;
-            case '7': // 67	PUSH9	3	.	uint72		push 9-byte value onto stack
-                printf("PUSH7 todo\n");
+            case '7': { // 67	PUSH9	3	.	uint72		push 9-byte value onto stack
+                        uint64_t value = 0;
+                        for (int i = 0; i < 8; i++) {
+                        value |= (uint64_t)state->contract_bytecode[state->pc + i + 1] << (8 * (7 - i));
+                        }
+                        state->stack[state->stack_pointer++] = value;
+                        state->pc += 8;
+                     }
             break;
-            case '8': // 68	PUSH todo0	3	.	uint80		push 10-byte value onto stack	
-                printf("PUSH8 todo\n");
+            case '8': //{ // 68	PUSH todo0	3	.	uint80		push 10-byte value onto stack	
+                   /*     uint72_t value = 0;
+                        for (int i = 0; i < 9; i++) {
+                        value |= (uint72_t)state->contract_bytecode[state->pc + i + 1] << (8 * (8 - i));
+                        }
+                        state->stack[state->stack_pointer++] = value;
+                        state->pc += 9;
+                     }
+                    */
             break;
             case '9': // 69	PUSH todo0	3	.	uint80		push 10-byte value onto stack	
                 printf("PUSH9 todo\n");
@@ -622,8 +773,13 @@ void run_evm(evm_state * state) {
             case 'e': // 7E	PUSH31	3	.	uint248		push 31-byte value onto stack
                 printf("PUSH 31 todo\n");
             break;
-            case 'f': // 7F	PUSH32	3	.	uint256		push 32-byte value onto stack	
-                printf("PUSH 32 todo\n");
+            case 'f': // { // 7F	PUSH32	3	.	uint256		push 32-byte value onto stack	
+             /*   unsigned long long pushValue = 0;
+                for (int i = 0; i < 8; i++) {
+                    pushValue |= (unsigned long long)value[i] << (56 - 8 * i);
+                }
+                state->stack[state->stack_pointer++] = pushValue;
+                } */
             break;
         }
         break;
@@ -633,53 +789,130 @@ void run_evm(evm_state * state) {
         switch (opcode[1]) {
 
 
-            case '0': // 80	DUP1	3	a	a, a		clone 1st value on stack
-                printf("DUP 1\n");
+            case '0': { // 80	DUP1	3	a	a, a		clone 1st value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 1];
+                        state->stack[state->stack_pointer] = a;
+                      }
             break;
-            case '1': // 81	DUP2	3	_, a	a, _, a		clone 2nd value on stack
-                printf("DUP todo\n");
+            case '1': { // 81	DUP2	3	_, a	a, _, a		clone 2nd value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 2];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 2; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 2] = a;
+                       }
             break;
-            case '2': // 82	DUP3	3	_, _, a	a, _, _, a		clone 3rd value on stack
-                printf("DUP todo\n");
+            case '2': { // 82	DUP3	3	_, _, a	a, _, _, a		clone 3rd value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 3];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 3; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 3] = a;
+                      }
             break;
-            case '3': // 83	DUP4	3	_, _, _, a	a, _, _, _, a		clone 4th value on stack
-                printf("DUP todo\n");
+            case '3': { // 83	DUP4	3	_, _, _, a	a, _, _, _, a		clone 4th value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 4];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 4; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 4] = a;
+                      }
             break;
-            case '4': // 84	DUP5	3	..., a	a, ..., a		clone 5th value on stack
-                printf("DUP todo\n");
+            case '4': { // 84	DUP5	3	..., a	a, ..., a		clone 5th value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 5];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 5; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 5] = a;
+                      }
             break;
-            case '5': // 85	DUP6	3	..., a	a, ..., a		clone 6th value on stack
-                printf("DUP todo\n");
+            case '5': { // 85	DUP6	3	..., a	a, ..., a		clone 6th value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 6];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 6; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 6] = a;
+                      }
             break;
-            case '6': // 86	DUP7	3	..., a	a, ..., a		clone 7th value on stack
-                printf("DUP todo\n");
+            case '6': { // 86	DUP7	3	..., a	a, ..., a		clone 7th value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 7];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 7; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 7] = a;
+                      }
             break;
-            case '7': // 87	DUP8	3	..., a	a, ..., a		clone 8th value on stack
-                printf("DUP todo\n");
+            case '7': { // 87	DUP8	3	..., a	a, ..., a		clone 8th value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 8];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 8; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 8] = a;
+                      }
             break;
-            case '8': // 88	DUP9	3	..., a	a, ..., a		clone 9th value on stack
-                printf("DUP todo\n");
+            case '8': { // 88	DUP9	3	..., a	a, ..., a		clone 9th value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 9];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 9; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 9] = a;
+                      }
             break;
-            case '9': // 89	DUP10	3	..., a	a, ..., a		clone 10th value on stack
-                printf("DUP todo\n");
+            case '9': { // 89	DUP10	3	..., a	a, ..., a		clone 10th value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 10];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 10; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 10] = a;
+                      }
             break;
-            case 'a': // 8A	DUP11	3	..., a	a, ..., a		clone 11th value on stack
-                printf("DUP todo\n");
+            case 'a': { // 8A	DUP11	3	..., a	a, ..., a		clone 11th value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 11];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 11; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 11] = a;
+                      }
             break;
-            case 'b': // 8B	DUP12	3	..., a	a, ..., a		clone 12th value on stack
-                printf("DUP todo\n");
+            case 'b': { // 8B	DUP12	3	..., a	a, ..., a		clone 12th value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 12];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 12; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 12] = a;
+                      }
             break;
-            case 'c': // 8C	DUP13	3	..., a	a, ..., a		clone 13th value on stack
-                printf("DUP todo\n");
+            case 'c': { // 8C	DUP13	3	..., a	a, ..., a		clone 13th value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 13];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 13; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 13] = a;
+                      }
             break;
-            case 'd': // 8D	DUP14	3	..., a	a, ..., a		clone 14th value on stack
-                printf("DUP todo\n");
+            case 'd': { // 8D	DUP14	3	..., a	a, ..., a		clone 14th value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 14];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 14; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 14] = a;
+                      }
             break;
-            case 'e': // 8E	DUP15	3	..., a	a, ..., a		clone 15th value on stack
-                printf("DUP todo\n");
+            case 'e': { // 8E	DUP15	3	..., a	a, ..., a		clone 15th value on stack
+                        uint16_t a = state->stack[state->stack_pointer - 15];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 15; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 15] = a;
+                      }
             break;
-            case 'f': // 8F	DUP16	3	..., a	a, ..., a
-                printf("DUP todo\n");
+            case 'f': { // 8F	DUP16	3	..., a	a, ..., a
+                        uint16_t a = state->stack[state->stack_pointer - 16];
+                        for (int i = state->stack_pointer; i >= state->stack_pointer - 16; i--) {
+                            state->stack[i] = state->stack[i - 1];
+                        }
+                        state->stack[state->stack_pointer - 16] = a;
+                      }
             break;
         }
         break;
@@ -690,157 +923,145 @@ void run_evm(evm_state * state) {
 
 
             case '0': /// SWAP1 	Exchange 1st and 2nd stack items
-      a = state -> stack[state -> stack_pointer - 1];
-      state -> stack[state -> stack_pointer - 1] = state -> stack[state -> stack_pointer - 2];
-      state -> stack[state -> stack_pointer - 2] = a;
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                state->stack[state->stack_pointer - 1] = state->stack[state->stack_pointer - 2];
+                state->stack[state->stack_pointer - 2] = a;
+            }
             break;
             case '1': // SWAP2 	Exchange 1st and 3rd stack items
-      a = state -> stack[state -> stack_pointer - 1];
-      b = state -> stack[state -> stack_pointer - 2];
-      state -> stack[state -> stack_pointer - 1] = state -> stack[state -> stack_pointer - 3];
-      state -> stack[state -> stack_pointer - 2] = b;
-      state -> stack[state -> stack_pointer - 3] = a;
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                uint16_t b = state->stack[state->stack_pointer - 3];
+                state->stack[state->stack_pointer - 1] = b;
+                state->stack[state->stack_pointer - 3] = a;
+            }
             break;
             case '2':  // SWAP3 	Exchange 1st and 4th stack items
-      a = state -> stack[state -> stack_pointer - 1];
-      b = state -> stack[state -> stack_pointer - 2];
-      c = state -> stack[state -> stack_pointer - 3];
-      state -> stack[state -> stack_pointer - 1] = state -> stack[state -> stack_pointer - 4];
-      state -> stack[state -> stack_pointer - 2] = c;
-      state -> stack[state -> stack_pointer - 3] = b;
-      state -> stack[state -> stack_pointer - 4] = a;
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 3; i--) {
+                    state->stack[i] = state->stack[i - 1];
+                }
+                state->stack[state->stack_pointer - 3] = a;
+            }
             break;
             case '3': // SWAP4 	Exchange 1st and 5th stack items
-      a = state -> stack[state -> stack_pointer - 1];
-      b = state -> stack[state -> stack_pointer - 2];
-      c = state -> stack[state -> stack_pointer - 3];
-      d = state -> stack[state -> stack_pointer - 4];
-      state -> stack[state -> stack_pointer - 1] = state -> stack[state -> stack_pointer - 5];
-      state -> stack[state -> stack_pointer - 2] = d;
-      state -> stack[state -> stack_pointer - 3] = c;
-      state -> stack[state -> stack_pointer - 4] = b;
-      state -> stack[state -> stack_pointer - 5] = a;
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 4; i--) {
+                    state->stack[i] = state->stack[i - 1];
+                }
+                state->stack[state->stack_pointer - 4] = a;
+            }
             break;
             case '4': // SWAP5 	Exchange 1st and 6th stack items
-      a = state -> stack[state -> stack_pointer - 1];
-      b = state -> stack[state -> stack_pointer - 2];
-      c = state -> stack[state -> stack_pointer - 3];
-      d = state -> stack[state -> stack_pointer - 4];
-      e = state -> stack[state -> stack_pointer - 5];
-      state -> stack[state -> stack_pointer - 1] = state -> stack[state -> stack_pointer - 6];
-      state -> stack[state -> stack_pointer - 2] = e;
-      state -> stack[state -> stack_pointer - 3] = d;
-      state -> stack[state -> stack_pointer - 4] = c;
-      state -> stack[state -> stack_pointer - 5] = b;
-      state -> stack[state -> stack_pointer - 6] = a;
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 5; i--) {
+                    state->stack[i] = state->stack[i - 1];
+                }
+                state->stack[state->stack_pointer - 5] = a;
+            }
             break;
             case '5': // SWAP6 	Exchange 1st and 7th stack items
-      a = state -> stack[state -> stack_pointer - 1];
-      b = state -> stack[state -> stack_pointer - 2];
-      c = state -> stack[state -> stack_pointer - 3];
-      d = state -> stack[state -> stack_pointer - 4];
-      e = state -> stack[state -> stack_pointer - 5];
-      f = state -> stack[state -> stack_pointer - 6];
-      state -> stack[state -> stack_pointer - 1] = state -> stack[state -> stack_pointer - 7];
-      state -> stack[state -> stack_pointer - 2] = f;
-      state -> stack[state -> stack_pointer - 3] = e;
-      state -> stack[state -> stack_pointer - 4] = d;
-      state -> stack[state -> stack_pointer - 5] = c;
-      state -> stack[state -> stack_pointer - 6] = b;
-      state -> stack[state -> stack_pointer - 7] = a;
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 6; i--) {
+                    state->stack[i] = state->stack[i - 1];
+                }
+                state->stack[state->stack_pointer - 6] = a;
+            }
             break;
             case '6': // SWAP7 	Exchange 1st and 8th stack items
-      a = state -> stack[state -> stack_pointer - 1];
-      b = state -> stack[state -> stack_pointer - 2];
-      c = state -> stack[state -> stack_pointer - 3];
-      d = state -> stack[state -> stack_pointer - 4];
-      e = state -> stack[state -> stack_pointer - 5];
-      f = state -> stack[state -> stack_pointer - 6];
-      g = state -> stack[state -> stack_pointer - 7];
-      state -> stack[state -> stack_pointer - 1] = state -> stack[state -> stack_pointer - 8];
-      state -> stack[state -> stack_pointer - 2] = g;
-      state -> stack[state -> stack_pointer - 3] = f;
-      state -> stack[state -> stack_pointer - 4] = e;
-      state -> stack[state -> stack_pointer - 5] = d;
-      state -> stack[state -> stack_pointer - 6] = c;
-      state -> stack[state -> stack_pointer - 7] = b;
-      state -> stack[state -> stack_pointer - 8] = a;
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 7; i--) {
+                    state->stack[i] = state->stack[i - 1];
+                }
+                state->stack[state->stack_pointer - 7] = a;
+            }
             break;
             case '7': // SWAP8 	Exchange 1st and 9th stack items
-      a = state -> stack[state -> stack_pointer - 1];
-      b = state -> stack[state -> stack_pointer - 2];
-      c = state -> stack[state -> stack_pointer - 3];
-      d = state -> stack[state -> stack_pointer - 4];
-      e = state -> stack[state -> stack_pointer - 5];
-      f = state -> stack[state -> stack_pointer - 6];
-      g = state -> stack[state -> stack_pointer - 7];
-      h = state -> stack[state -> stack_pointer - 8];
-      state -> stack[state -> stack_pointer - 1] = state -> stack[state -> stack_pointer - 9];
-      state -> stack[state -> stack_pointer - 2] = h;
-      state -> stack[state -> stack_pointer - 3] = g;
-      state -> stack[state -> stack_pointer - 4] = f;
-      state -> stack[state -> stack_pointer - 5] = e;
-      state -> stack[state -> stack_pointer - 6] = d;
-      state -> stack[state -> stack_pointer - 7] = c;
-      state -> stack[state -> stack_pointer - 8] = b;
-      state -> stack[state -> stack_pointer - 9] = a;
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 8; i--) {
+                    state->stack[i] = state->stack[i - 1];
+                }
+                state->stack[state->stack_pointer - 8] = a;
+            }
             break;
             case '8': // SWAP9
-                printf("Swap 9 todo\n");
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 9; i--) {
+                    state->stack[i] = state->stack[i - 1];
+                }
+                state->stack[state->stack_pointer - 9] = a;
+            }
             break;
             case '9': // SWAP10
-                printf("Swap 10 todo\n");
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 10; i--) {
+                    state->stack[i] = state->stack[i - 1];
+                }
+                state->stack[state->stack_pointer - 10] = a;
+            }
             break;
             case 'a': // SWAP11
-                printf("Swap 11 todo\n");
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 11; i--) {
+                    state->stack[i] = state->stack[i - 1];
+                }
+                state->stack[state->stack_pointer - 11] = a;
+            }
             break;
             case 'b': // SWAP12
-                printf("Swap 12 todo\n");
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 12; i--) {
+                    state->stack[i] = state->stack[i - 1];
+                }
+                state->stack[state->stack_pointer - 12] = a;
+            }
             break;
             case 'c': // SWAP13
-                printf("Swap 13 todo\n");
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 13; i--) {
+                    state->stack[i] = state->stack[i - 1];
+                }
+                state->stack[state->stack_pointer - 13] = a;
+            }
             break;
             case 'd': // SWAP14
-                printf("Swap 14 todo\n");
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 14; i--) {
+                    state->stack[i] = state->stack[i - 1];
+                }
+                state->stack[state->stack_pointer - 14] = a;
+            }
             break;
             case 'e': // SWAP15
-                printf("Swap 15 todo\n");
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 15; i--) {
+                    state->stack[i] = state->stack[i - 1];
+                }
+                state->stack[state->stack_pointer - 15] = a;
+            }
             break;
             case 'f':  // SWAP16
-      a = state -> stack[state -> stack_pointer - 1];
-      b = state -> stack[state -> stack_pointer - 2];
-      c = state -> stack[state -> stack_pointer - 3];
-      d = state -> stack[state -> stack_pointer - 4];
-      e = state -> stack[state -> stack_pointer - 5];
-      f = state -> stack[state -> stack_pointer - 6];
-      g = state -> stack[state -> stack_pointer - 7];
-      h = state -> stack[state -> stack_pointer - 8];
-      i = state -> stack[state -> stack_pointer - 9];
-      j = state -> stack[state -> stack_pointer - 10];
-      k = state -> stack[state -> stack_pointer - 11];
-      l = state -> stack[state -> stack_pointer - 12];
-      m = state -> stack[state -> stack_pointer - 13];
-      n = state -> stack[state -> stack_pointer - 14];
-      o = state -> stack[state -> stack_pointer - 15];
-      p = state -> stack[state -> stack_pointer - 16];
-      state -> stack[state -> stack_pointer - 1] = p;
-      state -> stack[state -> stack_pointer - 2] = o;
-      state -> stack[state -> stack_pointer - 3] = n;
-      state -> stack[state -> stack_pointer - 4] = m;
-      state -> stack[state -> stack_pointer - 5] = l;
-      state -> stack[state -> stack_pointer - 6] = k;
-      state -> stack[state -> stack_pointer - 7] = j;
-      state -> stack[state -> stack_pointer - 8] = i;
-      state -> stack[state -> stack_pointer - 9] = h;
-      state -> stack[state -> stack_pointer - 8] = i;
-      state -> stack[state -> stack_pointer - 9] = h;
-      state -> stack[state -> stack_pointer - 10] = g;
-      state -> stack[state -> stack_pointer - 11] = f;
-      state -> stack[state -> stack_pointer - 12] = e;
-      state -> stack[state -> stack_pointer - 13] = d;
-      state -> stack[state -> stack_pointer - 14] = c;
-      state -> stack[state -> stack_pointer - 15] = b;
-      state -> stack[state -> stack_pointer - 16] = a;
+            {
+                uint16_t a = state->stack[state->stack_pointer - 1];
+                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 16; i--) {
+                    state->stack[i] = state->stack[i - 1];
+                }
+                state->stack[state->stack_pointer - 16] = a;
+            }
             break;
         }
         break;
@@ -851,7 +1072,11 @@ void run_evm(evm_state * state) {
 
 
             case '0': // A0	LOG0	A8	ost, len	.		LOG0(memory[ost:ost+len-1])	
-                printf("LOG0 todo\n");
+            {
+             //   uint32_t ost = read_next_u32(state);
+              //  uint32_t len = read_next_u32(state);
+               // log0(&state->contract_bytecode[ost], len);
+            }
             break;
             case '1': // A1	LOG1	A8	ost, len, topic0	.		LOG1(memory[ost:ost+len-1], topic0)
                 printf("LOG1 todo\n");
@@ -1159,7 +1384,21 @@ void run_evm(evm_state * state) {
                 printf("Invalid\n");
             break;
             case 'a': //FA	STATICCALL	AA	gas, addr, argOst, argLen, retOst, retLen	success	mem[retOst:retOst+retLen-1] := returndata	
-                printf("FA\n");
+                {
+             /*   uint32_t gas = read_next_u32(state);
+                uint32_t addr = read_next_u32(state);
+                uint32_t argOst = read_next_u32(state);
+                uint32_t argLen = read_next_u32(state);
+                uint32_t retOst = read_next_u32(state);
+                uint32_t retLen = read_next_u32(state);
+
+                bool success = static_call(gas, addr, &state->contract_bytecode[argOst], argLen, &state->contract_bytecode[retOst], retLen);
+
+                    if (!success) {
+                    //revert();
+                    }
+*/
+                }
             break;
             case 'b': //FB	invalid	
                 printf("FB Invalid/Unused\n");
@@ -1167,14 +1406,37 @@ void run_evm(evm_state * state) {
             case 'c': //TXEXECGAS 	Not in yellow paper FIXME		
                 printf("FC\n");
             break;
-            case 'd': // FD	REVERT	0*	ost, len	.		revert(mem[ost:ost+len-1])	
-                printf("FD\n");
+            case 'd': // FD	REVERT	0*	ost, len	.		revert(mem[ost:ost+len-1])
+                {	
+                unsigned char ost_len = state->contract_bytecode[state->pc++];
+                unsigned short ost = state->stack[state->stack_pointer - ost_len];
+                unsigned short len = state->stack[state->stack_pointer - 1];
+
+                //revert((unsigned char*)ost, len);
+                
+                }            
             break;
             case 'e': //FE	INVALID	AF			designated invalid opcode - EIP-141	
-                printf("FE\n");
+                printf("INVALID (0x%X)\n", 0xFE);
             break;
             case 'f': //FF	SELFDESTRUCT	AB	addr
-                printf("FF\n");
+                { // SELFDESTRUCT
+                    // Get the address to send the remaining balance to from the stack
+                    unsigned char address[20];
+                        for (int i = 0; i < 20; i++) {
+                        address[i] = state->stack[--state->stack_pointer];
+                        }
+    
+                // Perform the self-destruct operation
+                // (This can be implemented in different ways depending on the context,
+                // for example, you could transfer the remaining balance of the contract
+                // to the specified address, delete the contract from storage, etc.)
+
+                // Set the execution status to "self-destructed"
+               /*  state->execution_status = SELFDESTRUCTED; */
+
+                // Exit the interpreter loop
+                }
             break;
         }
         break;
