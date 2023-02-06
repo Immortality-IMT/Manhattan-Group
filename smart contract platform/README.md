@@ -5,20 +5,20 @@ gcc -o vm vm.c -lm
 Process of smart contract functionality
 ---------------------------------------
 
-1. Write the contract in Solidity or Python. for example vyper as a compiler solution - https://vyper.readthedocs.io/en/stable/
-2. Convert the Python into bytecode. Convert to the virtual machine compatible format which is stripped down version of bytecode. 
-3. Compression can also be implemented on the transaction. Such as https://github.com/Arachnid/evmdis & https://github.com/ConsenSys/mythril
-4. Put the bytecode onto the blockchain as a transaction and bytecode as data. A unique contract address is returned. 
+1. Write the contract in Solidity or another language - https://vyper.readthedocs.io/en/stable/
+2. Convert the code into virtual machine compatible bytecode. 
+3. With a Gutenberg datatype, compression and techniques can also be implemented with the transaction. Such as https://github.com/Arachnid/evmdis & https://github.com/ConsenSys/mythril
+4. Put the bytecode on the blockchain as a regular transaction and bytecode as transaction data, a unique contract address is returned. 
 5. Every transaction has a data field for including smart contract bytecode or storing general data on blockchain.
-6. The smart-contract is a transaction and undergoes traditional blockchain processing, broadcasted, mined, blocked and added to blockchain.
-7. Once the transaction is mined, the smart contract is deployed and is now accessible at the contract address provided.
+6. The smart-contract is then a transaction and undergoes traditional blockchain processing, broadcasted, mined, blocked and added to blockchain.
+7. The smart contract is deployed and is now accessible at the contract address provided. 
+8. The owner can run the functions in the contract against the virtual machine and update the state of the code, because a call to the function requires public private key encryption. New transactions are records of the smart contract state.
+9. Primarily, it is the balance that is all important.
+10. Functions are executed by vm.c
 
 Solc - Compiler to code smart contracts
 ----------------------------------------
-
-Solidity Compiler - https://imt.cx/solc
-
-The compiler here produces bytecode that can be fed to vm.c for testing purposes.
+Solidity Compiler - https://imt.cx/solc - The compiler produces bytecode that can be fed to vm.c for testing purposes.
 
 Bytecode for HelloWorld
 -----------------------
@@ -75,6 +75,3 @@ label_0000:
 000B    01  ADD<br />
 000C    60  PUSH1 0x40<br />
 .....
-
-6. Each subsequent call to functions in the smart contract are transactions. Only the owner can sign and execute functions.
-7. Functions are executed by vm.c
