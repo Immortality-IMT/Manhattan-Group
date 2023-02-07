@@ -13,8 +13,9 @@ Process of smart contract functionality
 6. The smart-contract is then a transaction and undergoes traditional blockchain processing, broadcasted, mined, blocked and added to blockchain.
 7. The smart contract is deployed and is now accessible at the contract address provided, a transaction id. 
 8. The owner can run the functions in the contract against the virtual machine and update the state of the code, calls to functions requires the owner through public private key encryption. New transactions are records on the smart contract state.
-9. Further, calls to functions must process the transaction history to determine the current contract state and update the state in the latest transaction or the previous last transaction holds the current state.
-10. Functions are executed by vm.c
+9. Further, calls to functions must process the transaction history to determine the current contract state and update the state in the latest transaction or the previous last transaction holds the current state. 
+10. Smart contracts, from ledger to state machine. The ledger is used to record and keep track of the state of the code, new transactions call functions that update the code state. 
+11. Functions are executed by vm.c
 
 VM runs bytecode which are hex encoded values, they correspond to opcode instruction set, not x86 but a more financial based CPU instruction set. There is no need to decode the hex to get the opcode, mapping the 2byte hex value to the opcode in a swtich case is enough, e.g. Hex: 01 is always ADD...
 
