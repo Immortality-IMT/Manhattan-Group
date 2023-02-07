@@ -7,15 +7,15 @@ Process of smart contract functionality
 
 1. Write the contract in Solidity or another language - https://vyper.readthedocs.io/en/stable/
 2. Convert the code into virtual machine compatible bytecode. 
-3. With a Gutenberg datatype, compression and techniques can also be implemented with the transaction. Such as https://github.com/Arachnid/evmdis & https://github.com/ConsenSys/mythril
-4. Put the bytecode on the blockchain as a regular transaction and bytecode as transaction data, a unique contract address is returned. 
-5. Every transaction has a data field for including smart contract bytecode or storing general data on blockchain.
-6. The smart-contract is then a transaction and undergoes traditional blockchain processing, broadcasted, mined, blocked and added to blockchain.
-7. The smart contract is deployed and is now accessible at the contract address provided, a transaction id. 
-8. The owner can run the functions in the contract against the virtual machine and update the state of the code, calls to functions requires the owner through public private key encryption. New transactions are records on the smart contract state.
-9. Further, calls to functions must process the transaction history to determine the current contract state and update the state in the latest transaction or the previous last transaction holds the current state. 
-10. Smart contracts, from ledger to state machine. The ledger is used to record and keep track of the state of the code, new transactions call functions that update the code state. 
-11. Functions are executed by vm.c
+3. We add a super large data-type with no specific function, and we have another data-type to name the super-large data-type and then tell people to do anything with it, from the code or interface that interacts with the datatype. Gas system applies and compression and techniques can also be implemented with the transaction. Such as https://github.com/Arachnid/evmdis & https://github.com/ConsenSys/mythril
+6. Put the bytecode on the blockchain as a regular transaction and bytecode as transaction data, a unique contract address is returned. 
+7. Every transaction has a data field for including smart contract bytecode or storing general data on blockchain.
+8. The smart-contract is then a transaction and undergoes traditional blockchain processing, broadcasted, mined, blocked and added to blockchain.
+9. The smart contract is deployed and is now accessible at the contract address provided, a transaction id. 
+10. The owner can run the functions in the contract against the virtual machine and update the state of the code, calls to functions requires the owner through public private key encryption. New transactions are records on the smart contract state.
+11. Further, calls to functions must process the transaction history to determine the current contract state and update the state in the latest transaction or the previous last transaction holds the current state. 
+12. Smart contracts, from ledger to state machine. The ledger is used to record and keep track of the state of the code, new transactions call functions that update the code state. 
+13. Functions are executed by vm.c
 
 VM runs bytecode which are hex encoded values, they correspond to opcode instruction set, not x86 but a more financial based CPU instruction set. There is no need to decode the hex to get the opcode, mapping the 2byte hex value to the opcode in a swtich case is enough, e.g. Hex: 01 is always ADD...
 
