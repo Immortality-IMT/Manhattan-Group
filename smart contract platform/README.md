@@ -11,14 +11,14 @@ Process of smart contract functionality
 4. Put the bytecode on the blockchain as a regular transaction and bytecode as transaction data, a unique contract address is returned. 
 5. Every transaction has a data field for including smart contract bytecode or storing general data on blockchain.
 6. The smart-contract is then a transaction and undergoes traditional blockchain processing, broadcasted, mined, blocked and added to blockchain.
-7. The smart contract is deployed and is now accessible at the contract address provided. 
-8. The owner can run the functions in the contract against the virtual machine and update the state of the code, because a call to the function requires public private key encryption. New transactions are records of the smart contract state.
-9. Primarily, it is the balance that is all important.
+7. The smart contract is deployed and is now accessible at the contract address provided, a transaction id. 
+8. The owner can run the functions in the contract against the virtual machine and update the state of the code, calls to functions requires the owner through public private key encryption. New transactions are records on the smart contract state.
+9. Further, calls to functions must process the transaction history to determine the current contract state and update the state in the latest transaction or the previous last transaction holds the current state.
 10. Functions are executed by vm.c
 
 VM runs bytecode which are hex encoded values, they correspond to opcode instruction set, not x86 but a more financial based CPU instruction set. There is no need to decode the hex to get the opcode, mapping the 2byte hex value to the opcode in a swtich case is enough, e.g. Hex: 01 is always ADD...
 
-All the codes are here, the stack column is the hex values and every instruction must be coded.
+All the codes are here, the stack column is the hex values and every instruction must be coded. (which byw I am not overly joyed in doing)
 https://ethereum.org/en/developers/docs/evm/opcodes/
 
 Solc - Compiler to code smart contracts
