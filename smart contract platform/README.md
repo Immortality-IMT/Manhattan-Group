@@ -7,7 +7,7 @@ Process of smart contract functionality
 
 1. Write the contract in Solidity or another language - https://vyper.readthedocs.io/en/stable/
 2. Convert the code into virtual machine compatible bytecode. 
-3. We add a super large data-type with no specific function, and we have another data-type to name the super-large data-type and then tell people to do anything with it, from the code or interface that interacts with the datatype. Gas system applies and compression and techniques can also be implemented with the transaction. Such as https://github.com/Arachnid/evmdis & https://github.com/ConsenSys/mythril
+3. We add a super large data-type with no specific function, and we have another data-type to name the super-large data-type and then tell people to do anything with it, from the code or interface that interacts with the datatype. Monetization through blockchain. Gas system applies and compression and techniques can also be implemented with the transaction. Such as https://github.com/Arachnid/evmdis & https://github.com/ConsenSys/mythril
 6. Put the bytecode on the blockchain as a regular transaction and bytecode as transaction data, a unique contract address is returned. 
 7. Every transaction has a data field for including smart contract bytecode or storing general data on blockchain.
 8. The smart-contract is then a transaction and undergoes traditional blockchain processing, broadcasted, mined, blocked and added to blockchain.
