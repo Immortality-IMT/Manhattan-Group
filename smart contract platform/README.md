@@ -7,7 +7,7 @@ Process of smart contract functionality
 
 1. Write the contract in Solidity or another language - https://vyper.readthedocs.io/en/stable/
 2. Convert the code into virtual machine compatible bytecode. 
-3. The bytecode is stored is a super large data field, there is no reason to assign a specific function to the datatype, the user can assign a function to an additional field signifying what the data is supposed to be. Compression and tools such as cost to access the data, license data, cost to add data and other schemes can be implemented with the transaction. These are user-defined stores. Such as https://github.com/Arachnid/evmdis & https://github.com/ConsenSys/mythril
+3. The bytecode is stored is a super large data field.
 6. Put the bytecode on the blockchain as a regular transaction and bytecode as transaction data, a unique contract address is returned. 
 7. Every transaction has a data field for including smart contract bytecode or storing general data on blockchain.
 8. The smart-contract is then a transaction and undergoes traditional blockchain processing, broadcasted, mined, blocked and added to blockchain.
@@ -81,3 +81,7 @@ label_0000:
 000B    01  ADD<br />
 000C    60  PUSH1 0x40<br />
 .....
+In Bitcoin, the smart contract is limited to a traditional transaction. Ethereum with smart contract expands ad anything that can be computer programmed lives on blockchain, but it is a mere means to transactions. The contract is a means to feed the transaction. It is the transaction which is all important. In thinking abut this and to expand that further, we can universalize it in that all things that trigger people enough to feed the transaction should be on blockchain, not limited to smart contracts. If it there triggers people enough to transaction, then it can bought and sold.
+From Bitcoin To Eth and Beyond
+------------------------------
+In Bitcoin, the smart contract is limited to the traditional transaction. Ethereum with smart contracts expands and anything that can be computer programmed lives on blockchain, but it is a mere means to transactions. A facility to transactions. The contract is a means to feed the transaction, and it is the transaction which is all important. In thinking abut this and to expand on that further, we can universalize and all things that trigger people enough to transaction should have place on blockchain and blockchain design should accommodate such and so not limited to smart contracts but instead if it has transaction potential, then it can bought and sold.
