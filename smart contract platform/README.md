@@ -81,7 +81,3 @@ label_0000:
 000B    01  ADD<br />
 000C    60  PUSH1 0x40<br />
 .....
-
-From Bitcoin To Eth and Beyond
-------------------------------
-In Bitcoin, the smart contract is limited to the traditional transaction. Ethereum with smart contracts expands and anything that can be computer programmed lives on blockchain, but it is a mere means to transactions. A facility to transactions. The contract is a means to feed the transaction, and it is the transaction which is all important, it is a product for transactions. In thinking abut this and to expand on that further, we can universalize and all things that trigger people enough to make transaction should have place on blockchain and blockchain design should accommodate such and so not limited to smart contracts but instead if the product has transaction potential, then it can bought and sold.
