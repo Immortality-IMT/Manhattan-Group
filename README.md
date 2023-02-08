@@ -39,3 +39,8 @@ Part 1: Node discovery system of the peer to peer network<br />
 Part 2: Propagation and latency of information to the peer to peer network<br />
 Part 3: Is the blockchain stuff, mining, wallets, crunching numbers...<br />
 Part 4: Smart contract platform<br />
+
+
+From Bitcoin To Eth and Beyond
+------------------------------
+In Bitcoin, the smart contract is limited to the traditional transaction. Ethereum with smart contracts expands and anything that can be computer programmed lives on blockchain, but it is a mere means to transactions. A facility to transactions. The contract is a means to feed the transaction, and it is the transaction which is all important, it is a product for transactions. In thinking abut this and to expand on that further, we can universalize and all things that trigger people enough to make transaction should have place on blockchain and blockchain design should accommodate such and so not limited to smart contracts but instead if the product has transaction potential, then it can be bought and sold.
