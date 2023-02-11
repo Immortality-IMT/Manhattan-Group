@@ -44,20 +44,17 @@ The implementation of Dilithium2 requires OQS lib
 --------------------------------------------------
 APT...
 
- sudo apt install astyle cmake gcc ninja-build libssl-dev python3-pytest python3-pytest-xdist
+ sudo apt install astyle cmake gcc ninja-build libssl-dev python3-pytest python3-pytest-xdist<br>
+ git clone -b main https://github.com/open-quantum-safe/liboqs.git<br>
+ cd liboqs<br>
+
+build:<br>
+
+ mkdir build && cd build<br>
+ cmake -GNinja -DBUILD_SHARED_LIBS=ON ..<br>
+ ninja<br>
+ ninja install<br>
+
+if /usr/local/lib is not in $PATH<br>
  
- git clone -b main https://github.com/open-quantum-safe/liboqs.git
- 
- cd liboqs
-
-build:
-
- mkdir build && cd build
- cmake -GNinja -DBUILD_SHARED_LIBS=ON ..
- ninja
- ninja install
-
-if /usr/local/lib is not in $PATH
- 
- export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
-
+ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib<br>
