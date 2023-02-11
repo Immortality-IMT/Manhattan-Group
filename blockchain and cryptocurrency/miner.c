@@ -5,7 +5,6 @@
     gcc -g -o wallet transactions.c wallet.c verifications.c functions.h miner.c blockchain.c -lssl -lcrypto -lsqlite3 -lz
 */
 
-//void create_block() {
 struct block create_block(void) { //actually returns a block
 
     sqlite3 *db;
@@ -13,6 +12,7 @@ struct block create_block(void) { //actually returns a block
     char **result;
     int nrow, ncol;
     char *output = malloc(1);
+    int counter = 0;
 
     int rc = sqlite3_open(DB_TRANSACTIONS, &db);
     if (rc) {
@@ -38,9 +38,10 @@ struct block create_block(void) { //actually returns a block
             int len = strlen(output) + 2;
             output = realloc(output, len);
             strcat(output, "\n");
+            counter++;
         }
 
-        //printf(">>>>>>>>>: %s", output);
+        printf("COUNTER: %d", counter);
     }
 
     sqlite3_free_table(result);
@@ -48,8 +49,14 @@ struct block create_block(void) { //actually returns a block
 
     struct block new_block;
     new_block.timestamp = time(NULL);
+    new_block.transaction_count = 0;
+    new_block.nonce = 0;
+
     strcpy(new_block.transaction_bundle, output);
     strcpy(new_block.previous_hash, get_previous_hash());
+
+    new_block.transaction_count = counter;
+
     hash_block(&new_block);
 
        free(output);
@@ -89,65 +96,99 @@ char* get_previous_hash(void) {
     return previous_hash;
 }
 
+// change PoW DIFFICULTY in function.h
 void hash_block(struct block *b) {
-    // Create a SHA-256 context
-    SHA256_CTX ctx;
-    SHA256_Init(&ctx);
+    char data[129999];
+    sprintf(data, "%d%s%ld%d%s", b->block_index, b->previous_hash, b->timestamp, b->transaction_count, b->transaction_bundle);
 
-    // Hash the previous hash, the transaction bundle, and the timestamp
-    SHA256_Update(&ctx, b->previous_hash, sizeof(b->previous_hash));
-    SHA256_Update(&ctx, b->transaction_bundle, sizeof(b->transaction_bundle));
-    SHA256_Update(&ctx, &b->timestamp, sizeof(b->timestamp));
+    unsigned char hash[SHA384_DIGEST_LENGTH];
+    SHA384((unsigned char *)data, strlen(data), hash);
 
-    // Finalize the hash and store it in the block's block_hash field
-    unsigned char hash[SHA256_DIGEST_LENGTH];
-    SHA256_Final(hash, &ctx);
+    int nonce = 0;
+    int leading_zeros = 0;
 
-    // Create a BIO for hexadecimal conversion
-    BIO *bio, *b64;
-    b64 = BIO_new(BIO_f_base64());
-    bio = BIO_new(BIO_s_mem());
-    bio = BIO_push(b64, bio);
-    BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
-    BIO_write(bio, hash, sizeof(hash));
-    BIO_flush(bio);
+    while (nonce < UINT32_MAX) {
+        unsigned char new_hash[SHA384_DIGEST_LENGTH];
+        sprintf(data, "%d%s%ld%d%s%d", b->block_index, b->previous_hash, b->timestamp, b->transaction_count, b->transaction_bundle, nonce);
+        SHA384((unsigned char *)data, strlen(data), new_hash);
 
-    // Get the hexadecimal string from the BIO
-    char *hex_str;
-    int len = BIO_get_mem_data(bio, &hex_str);
-    memcpy(b->block_hash, hex_str, len);
-    b->block_hash[len] = '\0';
+        leading_zeros = 0;
+        for (int i = 0; i < DIFFICULTY; i++) {
+            if (new_hash[i] == 0) {
+                leading_zeros++;
+            } else {
+                break;
+            }
+        }
 
-    // Clean up
-    BIO_free_all(bio);
+        if (leading_zeros == DIFFICULTY) {
+            memcpy(b->block_hash, new_hash, SHA384_DIGEST_LENGTH);
+            b->nonce = nonce;
+            break;
+        }
+
+        nonce++;
+
+        // Debug information
+        if (nonce % 1000 == 0) {
+            printf("Current nonce: %d\n", nonce);
+            printf("Leading zeros: %d\n", leading_zeros);
+        }
+    }
+
+    printf("Proof-of-work successful!\n");
+    printf("Final nonce: %d\n", b->nonce);
+
+
+    for (int i = 0; i < 48; i++) {
+        sprintf(b->block_hash_hex + (i * 2), "%02x",  b->block_hash[i]);
+    }
+
+    printf("\n>>>>%s\n", b->block_hash_hex);
+    printf("\n");
+
+    printf("Tranaction Data: %s", b->transaction_bundle);
+
 }
 
 /*
 void hash_block(struct block *b) {
-    // Create a SHA-256 context
-    SHA256_CTX ctx;
-    SHA256_Init(&ctx);
+    // Create a SHA3 384-bit context
+    EVP_MD_CTX *mdctx;
+    const EVP_MD *md;
+    unsigned char md_value[EVP_MAX_MD_SIZE];
+    int md_len, i;
+
+    mdctx = EVP_MD_CTX_new();
+    md = EVP_sha3_384();
+    EVP_DigestInit_ex(mdctx, md, NULL);
 
     // Hash the previous hash, the transaction bundle, and the timestamp
-    SHA256_Update(&ctx, b->previous_hash, sizeof(b->previous_hash));
-    SHA256_Update(&ctx, b->transaction_bundle, sizeof(b->transaction_bundle));
-    SHA256_Update(&ctx, &b->timestamp, sizeof(b->timestamp));
+    EVP_DigestUpdate(mdctx, b->previous_hash, sizeof(b->previous_hash));
+    EVP_DigestUpdate(mdctx, b->transaction_bundle, sizeof(b->transaction_bundle));
+    EVP_DigestUpdate(mdctx, &b->timestamp, sizeof(b->timestamp));
 
     // Finalize the hash and store it in the block's block_hash field
-    SHA256_Final((unsigned char *) b->block_hash, &ctx);
+    EVP_DigestFinal_ex(mdctx, md_value, &md_len);
 
-    printf(">:%s", b->block_hash);
+    for (i = 0; i < md_len; i++) {
+        sprintf(b->block_hash + (i * 2), "%02x", md_value[i]);
+    }
+    b->block_hash[md_len * 2] = '\0';
 
-}*/
+    // Clean up
+    EVP_MD_CTX_free(mdctx);
+}
+*/
 
 void add_block(struct block new_block) {
 
-        printf("\nThe Block\n");
-        printf("Block Hash: %s\n", new_block.block_hash);
-        printf("Previous Hash: %s\n", new_block.previous_hash);
-        printf("Transactions: %s\n", new_block.transaction_bundle);
-        printf("Timestamp: %d\n", new_block.timestamp);
-        printf("\nSize of new_block struct: %lu\n", sizeof(new_block));
+    printf("\nThe Block\n");
+    printf("Block Hash: %s\n", new_block.block_hash_hex);
+    printf("Previous Hash: %s\n", new_block.previous_hash);
+    printf("Transactions: %s\n", new_block.transaction_bundle);
+    printf("Timestamp: %ld\n", new_block.timestamp);
+    printf("\nSize of new_block struct: %lu\n", sizeof(new_block));
 
     sqlite3 *db;
     char *err_msg = 0;
@@ -159,7 +200,7 @@ void add_block(struct block new_block) {
         //exit(1);
     }
 
-    char *sql = "INSERT INTO blocks (block_hash, previous_hash, block_data, timestamp) VALUES (?, ?, ?, ?);";
+    char *sql = "INSERT INTO blocks (block_hash, previous_hash, block_data, transaction_count, timestamp, nonce) VALUES (?, ?, ?, ?, ?, ?);";
 
     sqlite3_stmt *stmt;
     rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
@@ -172,10 +213,13 @@ void add_block(struct block new_block) {
         exit(1);
     }
 
-    sqlite3_bind_text(stmt, 1, new_block.block_hash, strlen(new_block.block_hash), SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 1, new_block.block_hash_hex, strlen(new_block.block_hash_hex), SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt, 2, new_block.previous_hash, strlen(new_block.previous_hash), SQLITE_TRANSIENT);
     sqlite3_bind_text(stmt, 3, new_block.transaction_bundle, strlen(new_block.transaction_bundle), SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 4, new_block.timestamp);
+    sqlite3_bind_int(stmt, 4, new_block.transaction_count);
+
+    sqlite3_bind_int(stmt, 5, new_block.timestamp);
+    sqlite3_bind_int(stmt, 6, new_block.nonce);
 
     rc = sqlite3_step(stmt);
 

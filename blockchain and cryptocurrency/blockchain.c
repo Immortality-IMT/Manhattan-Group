@@ -17,7 +17,9 @@ struct block genesis_block;
     strcpy(genesis_block.previous_hash, "EPOCH");
     strcpy(genesis_block.block_hash, "EPOCH");
     strcpy(genesis_block.transaction_bundle, "EPOCH");
+    genesis_block.transaction_count = 0;
     genesis_block.timestamp = time(NULL);
+    genesis_block.nonce = 0;
  
     sqlite3 *db;
     char *zErrMsg = 0;
@@ -33,7 +35,8 @@ struct block genesis_block;
     }
 
     // Create a table to store the blocks
-    sql = "CREATE TABLE IF NOT EXISTS blocks(block_hash TEXT PRIMARY KEY, previous_hash TEXT, block_data TEXT, timestamp INTEGER);";
+    sql = "CREATE TABLE IF NOT EXISTS blocks(block_hash TEXT PRIMARY KEY, previous_hash TEXT, block_data TEXT, transaction_count INTEGER, timestamp INTEGER, nonce INTEGER)";
+    //sql = "CREATE TABLE IF NOT EXISTS blocks(block_hash TEXT PRIMARY KEY, previous_hash TEXT, block_data TEXT, timestamp INTEGER);";
     rc = sqlite3_exec(db, sql, NULL, 0, &zErrMsg);
     if( rc != SQLITE_OK ) {
         fprintf(stderr, "SQL error: %s\n", zErrMsg);
@@ -55,14 +58,17 @@ struct block genesis_block;
         genesis_block.timestamp = now - 1;
 
         sqlite3_stmt *stmt;
-        sqlite3_prepare_v2(db, "INSERT INTO blocks (block_hash, previous_hash, block_data, timestamp) VALUES (?,?,?,?)", -1, &stmt, NULL);
+        sqlite3_prepare_v2(db, "INSERT INTO blocks (block_hash, previous_hash, block_data, transaction_count, timestamp, nonce) VALUES (?,?,?,?,?,?)", -1, &stmt, NULL);
 
         sqlite3_bind_text(stmt, 1, genesis_block.block_hash, strlen(genesis_block.block_hash), SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 2, genesis_block.previous_hash, strlen(genesis_block.previous_hash), SQLITE_TRANSIENT);
         sqlite3_bind_text(stmt, 3, genesis_block.transaction_bundle, strlen(genesis_block.transaction_bundle), SQLITE_TRANSIENT);
-        sqlite3_bind_int(stmt, 4, genesis_block.timestamp);
+        sqlite3_bind_int(stmt, 4, genesis_block.transaction_count);
+        sqlite3_bind_int(stmt, 5, genesis_block.timestamp);
+        sqlite3_bind_int(stmt, 6, genesis_block.nonce);
         sqlite3_step(stmt);
         sqlite3_finalize(stmt);
+
     }
 
         // Close the database connection
