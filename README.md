@@ -38,9 +38,4 @@ The project is broken up into separate parts and each are independent of each ot
 Part 1: Node discovery system of the peer to peer network<br />
 Part 2: Propagation and latency of information to the peer to peer network<br />
 Part 3: Is the blockchain stuff, mining, wallets, crunching numbers...<br />
-Part 4: Smart contract platform<br />
-
-
-From Bitcoin To Eth and Beyond
-------------------------------
-In Bitcoin, the smart contract is limited to the traditional transaction. Ethereum with smart contracts expands and anything that can be computer programmed lives on blockchain, but it is a mere means to transactions, a mere product for transactions and just a single product for transactions, "the smart contract" and its sales pitch. In thinking abut this and to expand on that further, we can universalize and say, all things that have transaction volume potential. That is, to develop blockchain is with primary goal of transaction volume potential. The user space for anyone to leverage the blockchain however they choose to achieve that transaction volume potential, in turn make their product a success. The proof is self-evident, not just smart contracts. Such a blockchain should offer an undefined user space, and blockchain development accommodates. Well, more so, dictates development direction. We are not selling smart contracts, instead any product the user can bring that has transaction potential, the blockchain needs to host it. The word for this API's, Application Programming Interfaces. Lately, gamers want to leverage blockchain. Gaming would benefit more from an API than trying to make it fit using smart contracts. An API provides gamers, drop in functions that handle the blockchain interface for the game. Each field has their specific API to provide drop in functions and open source means anyone can begin a new API for their purposes.
+Part 4: API's, smart contract platform<br />
