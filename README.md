@@ -39,3 +39,23 @@ Part 1: Node discovery system of the peer to peer network<br />
 Part 2: Propagation and latency of information to the peer to peer network<br />
 Part 3: Is the blockchain stuff, mining, wallets, crunching numbers...<br />
 Part 4: API's, smart contract platform<br />
+
+The implementation of Dilithium2 requires OQS lib
+--------------------------------------------------
+APT...
+
+ sudo apt install astyle cmake gcc ninja-build libssl-dev python3-pytest python3-pytest-xdist 
+ git clone -b main https://github.com/open-quantum-safe/liboqs.git
+ cd liboqs
+
+build:
+
+ mkdir build && cd build
+ cmake -GNinja -DBUILD_SHARED_LIBS=ON ..
+ ninja
+ ninja install
+
+if /usr/local/lib is not in $PATH
+ 
+ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+
