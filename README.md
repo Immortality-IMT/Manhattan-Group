@@ -20,11 +20,12 @@ Along with a bankless financial infrastructure, Manhattan Group seeks to fund fu
 
 If you are interested in being part of the moderation of the project, join and discuss blockchain at our telegram https://t.me/immortality_IMT
 
-Compile: make wallet node_discovery propagation vm
+#### Compile: make wallet node_discovery propagation vm
+The compilation produces execution files in each directory. Dilithium2 requires OQS lib, see below.
 
 The whitepaper is being written at https://imt.cx/blockchain.html
 
-There is no expediency in the production of this blockchain, we shall understand and solve all the problems in the whitepaper before we begin coding.
+There is no expediency in the production of this blockchain, we shall understand and solve all the problems in the whitepaper before we begin codi#### ng.
 
 <img align="right" src="https://github.com/Immortality-IMT/Manhattan-Project/blob/main/blockchain_cryptocurrency/screenshot_wallet.png" alt="Manhattan Project Blockchain Screenshot">
 
