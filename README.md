@@ -15,7 +15,7 @@ Along with a bankless financial infrastructure, Manhattan Group seeks to fund fu
 - The Big Brain Project - Dish brain projects
 - Space Tourism, indestructible human capsule guaranteeing safety
 - Cure Aging, live forever, cure cancer, feel good
-- Renewable energy, turn the worlds deserts into solar power stations and 100% proof of work from renewables
+- Renewable energy, turn the world's deserts into solar power stations and 100% proof of work from renewables
 - More computer power, manufacture faster personal computers and offer them at great prices
 
 If you are interested in being part of the moderation of the project, join and discuss blockchain at our telegram https://t.me/immortality_IMT
