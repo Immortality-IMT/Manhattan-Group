@@ -20,6 +20,8 @@ Along with a bankless financial infrastructure, Manhattan Group seeks to fund fu
 
 If you are interested in being part of the moderation of the project, join and discuss blockchain at our telegram https://t.me/immortality_IMT
 
+Compile: make wallet node_discovery propagation vm
+
 The whitepaper is being written at https://imt.cx/blockchain.html
 
 There is no expediency in the production of this blockchain, we shall understand and solve all the problems in the whitepaper before we begin coding.
@@ -55,3 +57,4 @@ build:<br>
 if /usr/local/lib is not in $PATH<br>
  
  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib<br>
+
