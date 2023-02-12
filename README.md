@@ -2,7 +2,7 @@
 
 <img align="right" src="https://imt.cx/assets/img/logo/mhg.png" width="200" alt="Manhattan Group Blockchain">
 
-[Immortality Cryptocurrency](https://int.cx) has a dedicated blockchain project. Immortality cryptocurrency migration to its own blockchain project, code-name, Manhattan Group.
+[Immortality Cryptocurrency](https://imt.cx) has a dedicated blockchain project. Immortality cryptocurrency migration to its own blockchain project, code-name, Manhattan Group.
 
 We are DeSci, watch the video here... https://youtu.be/-DeMklVWNdA
 
