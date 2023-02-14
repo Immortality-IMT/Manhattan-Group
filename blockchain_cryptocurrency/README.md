@@ -35,10 +35,6 @@ Why Use Proof of Work (POW)
 ---------------------------
 For miners, and for crypto miners to advance the investment into renewable energy projects and investment into faster computer hardware.
 
-Why Use a Relational Database? (SQL)
-------------------------------------
-Relational database is a proven technology with many tools. A web application can run SQL statements against the blockchain, a shopping cart can return if a transaction has succeeded on not. Another application that run specific search queries.
-
 Wny Use Next Gen Cryptography
 -----------------------------
 Cryptography has imporoved since Bitcoin's first version. It becomes a  major effort to move Bitcoin and most other cryptocurrencues to a more modern encryption. Modern cryptocurrency blockchain implementations should be using Sha3-384 and Dilithium2.
@@ -61,15 +57,3 @@ build:
 if /usr/local/lib is not in $PATH
  
  export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
-
-What is your TPS (transactions per second)
-------------------------------------------
-We have not benchmarked TPS as yet and we are aiming for Mastercard, Visa level TPS, which is about 2,000 TPS which can be achieved with sharding-based Proof-of-Work (PoW) such as Zilliqa, boasting 2,828 transactions per second and uses an unusual consensus mechanism that combines proof-of-work (PoW) and Practical Byzantine Fault Tolerance (pBFT).
-
-Eeternal Faucet
----------------
-A faucet gives out a free unit, for tasks. An infinite amount of units are avaialble. This is unlikely to have any affect on inflation or the value as many people lose their coins and is is not enought to have any real affect.
-
-Infinite Block Reward
----------------------
-No coins be added to system other than through mining, the block reward. Unlike Bitcoin their is no limit to the amount of dollars, instead the block reward is calculated as an lucrative average of gas fees in the block. This is unlikely to have any significant effect in inflation or the value as many people lose their coins and is is not enought to have any real affect.
