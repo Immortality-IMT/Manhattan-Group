@@ -1,15 +1,10 @@
 #include "functions.h"
 
-//Compile with...
-//    gcc -g -o wallet transactions.c wallet.c verifications.c functions.h miner.c blockchain.c base58.c keccak.c -lssl -lcrypto -lsqlite3 -lz -loqs
-
-
-void cleanup_stack(uint8_t *secret_key, size_t secret_key_len);
+//Run makefile to compile, make
 
 void cleanup_stack(uint8_t *secret_key, size_t secret_key_len) {
 	OQS_MEM_cleanse(secret_key, secret_key_len);
 }
-
 
 int create_transaction() {
 
@@ -20,6 +15,7 @@ int create_transaction() {
     char *err_msg = 0;
     int rc;
     char sql[99999];
+    char tmp_input[128]; //just a temp variable for holding stdin
 
     rc = sqlite3_open(DB_TRANSACTIONS, &db);
     if (rc != SQLITE_OK) {
@@ -36,7 +32,9 @@ int create_transaction() {
         sqlite3_free(err_msg);
         sqlite3_close(db);
         return 1;
-    }
+    }        
+
+    sqlite3_close(db); //close to get address from database
 
     printf("Enter sender address: "); getchar();
     fgets(new_transaction.sender, sizeof(new_transaction.sender), stdin);
@@ -45,18 +43,27 @@ int create_transaction() {
     fgets(new_transaction.recipient, sizeof(new_transaction.recipient), stdin);
 
     printf("Enter amount: ");
-    scanf("%lf", &new_transaction.amount);
+    fgets(tmp_input, sizeof(tmp_input), stdin);
+    tmp_input[strcspn(tmp_input, "\n")] = 0;
+    new_transaction.amount = strtold(tmp_input, NULL);
+    printf("Amount: %Lf\n", new_transaction.amount);
 
     printf("Enter transaction fee: ");
-    scanf("%lf", &new_transaction.miners_fee);
+    fgets(tmp_input, sizeof(tmp_input), stdin);
+    tmp_input[strcspn(tmp_input, "\n")] = 0;
+    new_transaction.miners_fee = strtold(tmp_input, NULL);
+    printf("Amount: %Lf\n", new_transaction.miners_fee);
 
     printf("Enter moonshot fee: ");
-    scanf("%lf", &new_transaction.moonshot_fee);
+    fgets(tmp_input, sizeof(tmp_input), stdin);
+    tmp_input[strcspn(tmp_input, "\n")] = 0;
+    new_transaction.moonshot_fee = strtold(tmp_input, NULL);
+    printf("Amount: %Lf\n", new_transaction.moonshot_fee);
 
     printf("Enter data (smart contract or a text description of the transaction) : "); getchar();
     fgets(new_transaction.data, sizeof(new_transaction.data), stdin);
 
-    /*
+    /* Getline example
     char *data = NULL;
     size_t data_len = 0;
     printf("Enter data (smart contract or a text description of the transaction) : "); getchar();
@@ -74,7 +81,7 @@ int create_transaction() {
 
     new_transaction.confirmed = 0; //the higher the number the better
 
-/* Can compress the data field to huffman encoding
+/* Compress non transaction data using huffman encoding
 
     char *compressed_data = (char *) malloc(CHUNK);
     int compressed_len = 0;
@@ -96,11 +103,13 @@ int create_transaction() {
     printf("Compressed data: %s\n", compressed_data);
     printf("Decompressed data: %s\n", decompressed_data);
 */
-/*
-    struct tm* timeinfo = localtime(&now);
-    char timestamp[32];
-    strftime(timestamp, sizeof(timestamp), "%Y-%m-%d %H:%M:%S", timeinfo);
-*/
+
+
+char *new_transaction_sender = new_transaction.sender;
+char *newline = strchr(new_transaction_sender, '\n');
+if (newline) {
+    *newline = '\0';
+}
 
 /* Check local blockchain for valid transaction */
     /* 
@@ -108,27 +117,63 @@ int create_transaction() {
        Does the sender have the funds
     */
 
-/* Sign the transaction with senders private key */
-    rc = sqlite3_open(DB_WALLET, &db);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "Error opening database: %s\n", sqlite3_errmsg(db));
-        sqlite3_close(db);
-        return -1;
-    }
+    memset(sql, 0, 99999);
 
-    snprintf(sql, sizeof(sql), "SELECT private_key, public_key FROM wallet WHERE address = %s;", new_transaction.sender);
-    sqlite3_stmt *stmt;
-    sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
-    sqlite3_bind_text(stmt, 1, new_transaction.sender, -1, SQLITE_STATIC);
-    int result = sqlite3_step(stmt);
-    if (result == SQLITE_ROW) {
-        const char *private_key_hex = (const char *)sqlite3_column_text(stmt, 0);
-        strcpy(wallet_keys.private_key, private_key_hex);
-        const char *public_key_hex = (const char *)sqlite3_column_text(stmt, 1);
-        strcpy(wallet_keys.public_key, public_key_hex);
-    }
-    sqlite3_finalize(stmt);
-    
+rc = sqlite3_open(DB_WALLET, &db);
+if (rc != SQLITE_OK) {
+    fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
+    sqlite3_close(db);
+    return 1;
+}
+
+sqlite3_stmt *stmt;
+
+snprintf(sql, sizeof(sql), "SELECT address, private_key, public_key FROM wallet");
+
+rc = sqlite3_prepare_v2(db, sql, -1, &stmt, NULL);
+if (rc != SQLITE_OK) {
+  fprintf(stderr, "Error preparing SQL statement: %s\n", sqlite3_errmsg(db));
+  return 1;
+}
+
+int result = sqlite3_step(stmt);
+bool address_found = false;
+while (result == SQLITE_ROW) {
+  const char *address = (const char *)sqlite3_column_text(stmt, 0);
+  if (address == NULL) {
+    fprintf(stderr, "Error: address is NULL\n");
+    return 1;
+  }
+
+if (strcmp(address, new_transaction.sender) == 0) {
+    address_found = true;
+
+    char *private_key_hex = malloc(OQS_SIG_dilithium_2_length_secret_key_hex);
+    snprintf(private_key_hex, OQS_SIG_dilithium_2_length_secret_key_hex, "%s", (const char *)sqlite3_column_text(stmt, 1));
+    strncpy(wallet_keys.private_key, private_key_hex, OQS_SIG_dilithium_2_length_secret_key_hex);
+
+    char *public_key_hex = malloc(OQS_SIG_dilithium_2_length_public_key_hex);
+    snprintf(public_key_hex, OQS_SIG_dilithium_2_length_public_key_hex, "%s", (const char *)sqlite3_column_text(stmt, 2));
+    strncpy(wallet_keys.public_key, public_key_hex, OQS_SIG_dilithium_2_length_public_key_hex);
+
+    break;
+  }
+
+  result = sqlite3_step(stmt);
+}
+
+if (!address_found) {
+    printf("Address does not exist\n");
+} else {
+    printf("\n\nPublic Key$: %s\n\n", wallet_keys.public_key);
+    printf("\n\nPrivate Key$: %s\n\n", wallet_keys.private_key);
+}
+
+
+sqlite3_finalize(stmt);
+sqlite3_close(db); //Insert transaction into database and close
+
+
     //sign it
     sign_transaction(new_transaction.sender, new_transaction.recipient, new_transaction.amount, wallet_keys.private_key, wallet_keys.public_key, new_transaction.signature);
 
@@ -140,7 +185,14 @@ int create_transaction() {
 
 /* Put into the transaction pool, send it, broadcast to the network, they perform verification and block it up... */
 
-    int ret = snprintf(sql, sizeof(sql), "INSERT INTO transactions (txid, sender, recipient, amount, miners_fee, moonshot_fee, data, data_type, timestamp, signature, confirmed) VALUES ('%s', '%s', '%s', %f, %f, %f, '%s', '%d', %ld, '%s', '%d');", new_transaction.txid, new_transaction.sender, new_transaction.recipient, new_transaction.amount, new_transaction.miners_fee, new_transaction.moonshot_fee, new_transaction.data, new_transaction.data_type, new_transaction.timestamp,new_transaction.signature, new_transaction.confirmed);
+    rc = sqlite3_open(DB_TRANSACTIONS, &db);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+        return 1;
+    }
+
+    int ret = snprintf(sql, sizeof(sql), "INSERT INTO transactions (txid, sender, recipient, amount, miners_fee, moonshot_fee, data, data_type, timestamp, signature, confirmed) VALUES ('%s', '%s', '%s', %Lf, %Lf, %Lf, '%s', '%d', %ld, '%s', '%d');", new_transaction.txid, new_transaction.sender, new_transaction.recipient, new_transaction.amount, new_transaction.miners_fee, new_transaction.moonshot_fee, new_transaction.data, new_transaction.data_type, new_transaction.timestamp,new_transaction.signature, new_transaction.confirmed);
 
     rc = sqlite3_open(DB_TRANSACTIONS, &db);
     if (rc != SQLITE_OK) {
@@ -159,23 +211,43 @@ int create_transaction() {
     sqlite3_close(db);
 }
 
-void sign_transaction(uint8_t *sender_address, uint8_t *receiver_address, double amount, uint8_t *private_key, uint8_t *public_key, uint8_t *signature) {
+void hex_to_bin(const char *hex_str, uint8_t *bin_str, size_t hex_len) {
+    for (size_t i = 0; i < hex_len; i += 2) {
+        char hex_byte[3] = {hex_str[i], hex_str[i+1], '\0'};
+        uint8_t byte = (uint8_t) strtol(hex_byte, NULL, 16);
+        bin_str[i/2] = byte;
+    }
+}
 
-   size_t signature_len = 2420; //sinature is always 2420 in Dilithium2, EUF-CMA
-   uint8_t tmp_signature[2420]; //sinature is always 2420 binary and x 2, 4840 hex encoded in Dilithium2
-   //public_key[2624]
-   //private_key[5056]
+int sign_transaction(uint8_t *sender_address, uint8_t *receiver_address, long double amount, uint8_t *private_key, uint8_t *public_key, uint8_t *signature) {
+    // Check input sizes
+    if (strlen((const char *) sender_address) == 0 || strlen((const char *) sender_address) > 69) {
+        fprintf(stderr, "ERROR: Invalid sender address. Too short.\n");
+        return -1;
+    }
+    if (strlen((const char *) receiver_address) > 69 || strlen((const char *) receiver_address) > 69) {
+        fprintf(stderr, "ERROR: Invalid receiver address. Too long.\n");
+        return -1;
+    }
+    if (strlen((const char *) private_key) != OQS_SIG_dilithium_2_length_secret_key_hex - 1) {
+        fprintf(stderr, "ERROR: Invalid private key.\n");
+        return -1;
+    }
+    if (strlen((const char *) public_key) != OQS_SIG_dilithium_2_length_public_key_hex - 1) {
+        fprintf(stderr, "ERROR: Invalid public key.\n");
+        return -1;
+    }
 
-    // Convert the hex encoded private key to binary
-    size_t private_key_len = 5056 / 2;
-    uint8_t private_key_bin[private_key_len];
-    EVP_DecodeBlock(private_key_bin, private_key, 5056);
+    size_t signature_len = OQS_SIG_dilithium_2_length_signature; //sinature always 2420 in Dilithium2, EUF-CMA
+    uint8_t tmp_signature[OQS_SIG_dilithium_2_length_signature]; //sinature always 2420 binary and x 2, 4840 hex encoded in Dilithium2
 
+    uint8_t private_key_bin[OQS_SIG_dilithium_2_length_secret_key]; //private_key hex = [5056] bin = [2528]
+    hex_to_bin(private_key, private_key_bin, OQS_SIG_dilithium_2_length_secret_key_hex);
+   
     // Convert the hex encoded public key to binary
-    size_t public_key_len = 2624 / 2;
-    uint8_t public_key_bin[public_key_len];
-    EVP_DecodeBlock(public_key_bin, public_key, 2624);
-
+    uint8_t public_key_bin[OQS_SIG_dilithium_2_length_public_key]; //public_key hex = [2624] bin = [1312]
+    hex_to_bin(public_key, public_key_bin, OQS_SIG_dilithium_2_length_public_key_hex);
+ 
     // Hash the message using sha3 384
     EVP_MD_CTX *mdctx = EVP_MD_CTX_create();
     EVP_DigestInit_ex(mdctx, EVP_sha3_384(), NULL);
@@ -183,10 +255,9 @@ void sign_transaction(uint8_t *sender_address, uint8_t *receiver_address, double
     EVP_DigestUpdate(mdctx, ":", 1);
     EVP_DigestUpdate(mdctx, receiver_address, strlen((const char *) receiver_address));
     EVP_DigestUpdate(mdctx, ":", 1);
-    char amount_str[11];
-    snprintf(amount_str, sizeof(amount_str), "%f", amount);
+    char amount_str[20];
+    snprintf(amount_str, sizeof(amount_str), "%.8Lf", amount);
     EVP_DigestUpdate(mdctx, amount_str, strlen(amount_str));
-
     uint8_t message_digest[EVP_MAX_MD_SIZE];
     unsigned int message_digest_len;
     EVP_DigestFinal_ex(mdctx, message_digest, &message_digest_len);
@@ -194,23 +265,34 @@ void sign_transaction(uint8_t *sender_address, uint8_t *receiver_address, double
 
     OQS_STATUS rc;
 
+/*  Debug
+    uint8_t message_digest[62];
+    unsigned int message_digest_len = 62;
+    // let's create a random test message to sign
+    OQS_randombytes(message_digest, message_digest_len);
+*/
+
     // Sign the message using dlithium2 
     rc = OQS_SIG_dilithium_2_sign(tmp_signature, &signature_len, message_digest, message_digest_len, private_key_bin);
     if (rc != OQS_SUCCESS) {
 		fprintf(stderr, "ERROR: OQS_SIG_dilithium_2_sign failed!\n");
-		//cleanup_stack(private_key, OQS_SIG_dilithium_2_length_secret_key);
-		//return; // OQS_ERROR;
+        fprintf(stderr, "ERROR: OQS function failed with error code %d.\n", rc);
+		cleanup_stack(private_key, OQS_SIG_dilithium_2_length_secret_key);
+		return OQS_ERROR;
 	}
-
+	
     rc = OQS_SIG_dilithium_2_verify(message_digest, message_digest_len, tmp_signature, signature_len, public_key_bin);
 	if (rc != OQS_SUCCESS) {
 		fprintf(stderr, "ERROR: OQS_SIG_dilithium_2_verify failed!\n");
-		//cleanup_stack(private_key, OQS_SIG_dilithium_2_length_secret_key);
-		//return; // OQS_ERROR;
+        fprintf(stderr, "ERROR: OQS function failed with error code %d.\n", rc);
+		cleanup_stack(private_key, OQS_SIG_dilithium_2_length_secret_key);
+		return OQS_ERROR;
 	}
 
-    for (int i = 0; i < 2420; i++)
+    for (int i = 0; i < OQS_SIG_dilithium_2_length_signature; i++)
         sprintf(signature + (i * 2), "%02x",  tmp_signature[i]);
+
+    printf("Signature OK!");
 }
 
 void get_txid(struct transaction *tx) {

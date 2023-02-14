@@ -2,7 +2,7 @@
 
 /*
     Grab transactions from the transaction pool (transactions.db) and make a block
-    gcc -g -o wallet transactions.c wallet.c verifications.c functions.h miner.c blockchain.c -lssl -lcrypto -lsqlite3 -lz
+    Run makefile to compile, make
 */
 
 struct block create_block(void) { //actually returns a block

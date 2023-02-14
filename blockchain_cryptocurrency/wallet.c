@@ -13,57 +13,71 @@ Compile with...
 */
 
 //Generate a private and public key pair, using CRYSTALS-Dilithium
-void generate_key_pair(uint8_t *public_key, uint8_t *private_key, size_t public_key_length, size_t private_key_length) {
+int generate_key_pair(uint8_t *public_key, uint8_t *private_key) {
 
-    //private key is always 2528 bytes;
-    //public key is always 1312 bytes;
-    //private and public key are encoded to hex to differentiate it from the address base 58
-    //Generate public key, using private key
+    //private key always 2528 bytes, public key always 1312 bytes;
+    //private and public key encoded to hex, address is base 58
 
-    memset(public_key, 0, public_key_length);
-    memset(private_key, 0, private_key_length);
+    if (public_key == NULL || private_key == NULL) {
+        fprintf(stderr, "Failed to allocate memory for public key.\n");
+        return 1;
+    }
 
+    memset(public_key, 0, OQS_SIG_dilithium_2_length_public_key);
+    memset(private_key, 0, OQS_SIG_dilithium_2_length_secret_key);
 
     OQS_SIG *sig = OQS_SIG_new(OQS_SIG_alg_dilithium_2);
     if (sig == NULL) {
         fprintf(stderr, "Failed to create a new signature object.\n");
-        return;
-    }
-
-    if (public_key == NULL) {
-        OQS_SIG_free(sig);
-        fprintf(stderr, "Failed to allocate memory for public key.\n");
-        return;
+        return 2;
     }
 
     int ret = OQS_SIG_keypair(sig, public_key, private_key);
     if (ret != OQS_SUCCESS) {
         OQS_SIG_free(sig);
-        fprintf(stderr, "Failed to generate the keypair.\n");
-        return;
+        fprintf(stderr, "Failed to generate the keypair.\n"); 
+        return 3;
     }
 
     OQS_SIG_free(sig);
+    return 0;
+
 }
 
 //address is the hash of the public key using sha3_384 bit
-void generate_new_address(uint8_t *public_key, uint8_t *address) {
+int generate_new_address(uint8_t *public_key, uint8_t *address) {
+    if (public_key == NULL || address == NULL) {
+        return 1;
+    }
 
     memset(address, 0, 48);
 
     EVP_MD_CTX *ctx = EVP_MD_CTX_new();
-    EVP_DigestInit_ex(ctx, EVP_sha3_384(), NULL);
-    EVP_DigestUpdate(ctx, public_key, 1312);
-    EVP_DigestFinal_ex(ctx, address, NULL);
+    if (ctx == NULL) {
+        return 2;
+    }
+
+    int ret = EVP_DigestInit_ex(ctx, EVP_sha3_384(), NULL);
+    if (ret != 1) {
+        EVP_MD_CTX_free(ctx);
+        return 3;
+    }
+
+    ret = EVP_DigestUpdate(ctx, public_key, 1312);
+    if (ret != 1) {
+        EVP_MD_CTX_free(ctx);
+        return 4;
+    }
+
+    unsigned int address_length = 0;
+    ret = EVP_DigestFinal_ex(ctx, address, &address_length);
+    if (ret != 1 || address_length != 48) {
+        EVP_MD_CTX_free(ctx);
+        return 5;
+    }
+
     EVP_MD_CTX_free(ctx);
-
-}
-
-void public_key_to_hex(unsigned char* public_key, char hex_public_key[66]) {
-  int i;
-  for (i = 0; i < 32; i++) {
-    sprintf(hex_public_key + (i * 2), "%02X", public_key[i]);
-  }
+    return 0;
 }
 
 int generate_address() {
@@ -72,7 +86,7 @@ int generate_address() {
     int rc;
     char *err_msg = 0;
 
-    char sql[20000]; //statement to copy keys statement to sqlite database wallet.db
+    char sql[16384]; //statement to copy keys statement to sqlite database wallet.db
     struct enc_wallet h_wallet; //takes the converted copy from bin to hex
     struct bin_wallet b_wallet; //used until final conversion copy from bin to hex
 
@@ -105,61 +119,74 @@ int generate_address() {
 
         for (int i = 0; i < 5; i++) {
 
-            memset(h_wallet.public_key, 0, sizeof(h_wallet.public_key));
-            memset(h_wallet.private_key, 0, sizeof(h_wallet.private_key));
+            generate_key_pair(b_wallet.public_key, b_wallet.private_key); //generate private/ public keypair
+            generate_new_address(b_wallet.public_key, b_wallet.address); //generate address, private/public key stored as hex, address as base58
 
-            //generate both private and public key pair
-            generate_key_pair(b_wallet.public_key, b_wallet.private_key, sizeof(b_wallet.public_key), sizeof(b_wallet.private_key));
 
-            //private and public key stored as hex, address as base58
-            generate_new_address(b_wallet.public_key, b_wallet.address); //generate address from public key
+            //Test that these keys are valid and can be used
+            int result = validate_key_pair(b_wallet.public_key, b_wallet.private_key, OQS_SIG_dilithium_2_length_public_key, OQS_SIG_dilithium_2_length_secret_key);
+            if (result != 0) fprintf(stderr, "\nKey validation failed with code %d\n", result);
+            if (result == 0) printf("\nKeypair tested as valid\n");
 
-            for (int x = 0; x < 1312; x++) {
+
+            memset(h_wallet.public_key, 0, OQS_SIG_dilithium_2_length_public_key_hex);
+            memset(h_wallet.private_key, 0, OQS_SIG_dilithium_2_length_secret_key_hex);
+
+            for (int x = 0; x < OQS_SIG_dilithium_2_length_public_key; x++) {  //Encode to hex
               int n = snprintf(h_wallet.public_key + (x * 2), 3, "%02X", b_wallet.public_key[x]);
               if (n < 0) {
-                // handle error
+                fprintf(stderr, "Error converting public key to hexadecimal\n");
+                return 1;
               }
             }
+            h_wallet.public_key[OQS_SIG_dilithium_2_length_public_key_hex] = '\0';
 
-            printf("\nPublic Key: %s\n\n", h_wallet.public_key);
-
-            for (int x = 0; x < 2528; x++) {
+            for (int x = 0; x < OQS_SIG_dilithium_2_length_secret_key; x++) { //Encode to hex
               int n = snprintf(h_wallet.private_key + (x * 2), 3, "%02X", b_wallet.private_key[x]);
               if (n < 0) {
-                // handle error
+                fprintf(stderr, "Error converting private key to hexadecimal\n");
+                return 1;
               }
-            };
+            }
+            h_wallet.private_key[OQS_SIG_dilithium_2_length_secret_key_hex] = '\0';
 
-            printf("\nPrivate Key: %s\n\n", h_wallet.private_key);
 
-            /* Hex encoded
-            for (int x = 0; x < 48; x++) {
-              int n = snprintf(h_wallet.address + (x * 2), 3, "%02X", b_wallet.address[x]);
-              if (n < 0) {
-                // handle error
-              }
-            };
-            */
+            printf("\n\nPublic Key: %.2624s\n\n", h_wallet.public_key);
+            printf("\n\nPrivate Key: %.5056s\n\n", h_wallet.private_key);
 
-            //Encode the address to base58
-            size_t base58_address_len = 96; //sha3 384 encodes to about 64, so 96 to be sure
-            //memset(b_wallet.address, 0, sizeof(b_wallet.address)); 
 
-            b58enc(h_wallet.address, &base58_address_len, b_wallet.address, 48);
-            printf("\nBase58: %s\n", h_wallet.address);
+            size_t base58_address_len = 69; //sha3-384 encodes to about 66, so 69 to be sure
+            memset(h_wallet.address, 0, sizeof(h_wallet.address)); 
 
-            //Insert the address into the database
-  int ret = snprintf(sql, sizeof(sql), "INSERT INTO wallet (address, private_key, public_key, balance) VALUES ('%s','%s','%s','%s');", h_wallet.address, h_wallet.private_key, h_wallet.public_key, "0");
-            rc = sqlite3_exec(db, sql, 0, 0, &err_msg);
+            b58enc(h_wallet.address, &base58_address_len, b_wallet.address, sizeof(b_wallet.address)); //Encode the address to base58
+            printf("\n\nBase58: %s\n\n", h_wallet.address);
+
+            h_wallet.address[69] = '\0';
+
+        //Insert the generated address` into database
+        int ret = snprintf(sql, sizeof(sql), "INSERT INTO wallet (address, private_key, public_key, statement, balance) VALUES ('%.69s','%.5056s','%.2624s', '%17s', '%2s');", h_wallet.address, h_wallet.private_key, h_wallet.public_key, "Address Generated", "0");
+        if (ret < 0 || ret >= sizeof(sql)) {
+            fprintf(stderr, "Error formatting SQL statement\n");
+            return 1;
+        }
+
+            int rc = sqlite3_exec(db, sql, 0, 0, &err_msg);
             if (rc != SQLITE_OK ) {
                 fprintf(stderr, "Failed to insert address: %s\n", err_msg);
                 sqlite3_free(err_msg);
+                return 1;
             }
+
+
         }
 
     printf("\nSuccessfully stored addresses in the wallet.\n");
-
     sqlite3_close(db);
+
+        printf("Testing all key pairs in wallet\n");
+        test_keys_in_wallet(); //test all the keys in pocket
+    
+    return 0;
 
 }
 
@@ -184,15 +211,6 @@ void print_table(const char* db_name, const char* table_name) {
 
     sqlite3_close(db);
 }
-
-/*
-static int callback(void *data, int argc, char **argv, char **col_name) {
-    for (int i = 0; i < argc; i++) {
-        printf("%s = %s\n", col_name[i], argv[i] ? argv[i] : "NULL");
-    }
-    printf("\n");
-    return 0;
-}*/
 
 static int callback(void *data, int argc, char **argv, char **col_name) {
 
@@ -243,7 +261,7 @@ struct block b;
 
     	printf("\nBlockchain demonstrator application <transaction account>\t\n");
     	printf("Please enter a number on your keypad\n");
-    	printf("\n(1) Generate new addresses\n(2) Print all addresses\n(3) Make a transaction\n(4) Print out transaction pool\n(5) Mine transactions into a block\n(6) Print out blockchain\n(7) Verify transaction\n(8) Verify block\n(9) Verify blockchain\n(10) Exit\n");
+    	printf("\n(1) Generate new addresses\n(2) Print all addresses\n(3) Make a transaction\n(4) Print out transaction pool\n(5) Mine transactions into a block\n(6) Print out blockchain\n(7) Verify transaction\n(8) Verify block\n(9) Verify blockchain\n(10) Test P2P Node Discoverty\n(11) Test Propagation and Latancy\n(12) Test Smart Contracts\n(13) Exit\n");
         printf("Enter a choice: ");
 
     	scanf("%d",&choice);
@@ -260,7 +278,8 @@ struct block b;
     				break;
                 case 3:
     				printf("Transaction: Make a new transaction, enter address of both parties and the amount of money\n");
-                    printf("e.g. A6i+1ZCmn0hTc5rwXTZtO3V7GqmQBnz8OA65JZ+zxoQ=, AzpGlJ0vRgNVpHc2vSJ14pWbnn02mc7Az3C88y74GTM=, 50)\n");
+                    printf("e.g. 2GzLgbtL3GBin4za8Jn5kunNbmTaDcfJfyYY7qpMT71fcou414kyAFj48DKetCwrPC, ");
+                    printf("AD6F6d7vcCgmTHLPC8XDhkDJDEbdCb1taP2kdRNo4fFrCqygFhQ7N72LpucBpbpEAM, 50)\n");
     				create_transaction();
     				break;
     			case 4:
@@ -305,11 +324,23 @@ struct block b;
                             printf("Block is invalid\n");
                             }
     				break;
-                case 10:
+    			case 10:
+    				printf("Testing P2P Node Discoverty:\n\n");//
+                         result = validate_blockchain(&b, 100);
+    				break;
+    			case 11:
+    				printf("Testing Propagation and Latancy:\n\n");//
+                         result = validate_blockchain(&b, 100);
+    				break;
+    			case 12:
+    				printf("Testing Smart Contracts:\n\n");//
+                         result = validate_blockchain(&b, 100);
+    				break;
+                case 13:
                     return 0;
                     break;
     			default:
-    				printf("Only numbers between 1 and 10\n");
+    				printf("Only numbers between 1 and 12\n");
     				break;
     		    }
     	}

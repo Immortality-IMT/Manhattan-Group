@@ -1,4 +1,3 @@
-#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -6,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-#include <memory.h>
 #include <openssl/bio.h>
 #include <openssl/bn.h>
 #include <openssl/buffer.h>
@@ -15,15 +13,10 @@
 #include <openssl/ecdsa.h>
 #include <openssl/evp.h>
 #include <openssl/objects.h>
-#include <openssl/rand.h>
-#include <openssl/ripemd.h>
-#include <openssl/sha.h>
 #include <openssl/ssl.h>
 #include <sqlite3.h>
-#include <time.h>
 #include <zlib.h>
 #include <oqs/oqs.h>
-#include <openssl/err.h>
 
 #define CHUNK 16384
 
@@ -31,24 +24,28 @@
 
 #define MAX_TRANSACTIONS 100
 #define BLOCK_SIZE 1000000
-#define DIFFICULTY 2              //the higher the more processing power, the harder
+#define DIFFICULTY 3              //the higher the more processing power, the harder
 
 #define DB_WALLET "DB/wallet.db"
 #define DB_TRANSACTIONS "DB/transactions.db"
 #define DB_BLOCKCHAIN "DB/blockchain.db"
 
+#define OQS_SIG_dilithium_2_length_public_key_hex (1312 * 2) + 1
+#define OQS_SIG_dilithium_2_length_secret_key_hex (2528 * 2) + 1
+#define OQS_SIG_dilithium_2_length_signature_hex (2420 * 2) + 1
+
 struct enc_wallet {
-    uint8_t public_key[2624]; //public key is always 1312 in Dilithium2, EUF-CMA, 2 x secret hex encoded key used to secure funds
-    uint8_t private_key[5056]; //private key is always 2528 in Dilithium2, EUF-CMA, 2 x hex encoded, use address instead
-    uint8_t address[96]; //address is sha3-384, 48 bytes = 384 bits, what you send to get pay or pay //base58 enc usually 66 bytes, 96 to be sure
+    uint8_t public_key[OQS_SIG_dilithium_2_length_public_key_hex]; //public key always 1312 in Dilithium2, EUF-CMA, 2 x hex encoded + 1 \0
+    uint8_t private_key[OQS_SIG_dilithium_2_length_secret_key_hex]; //private key always 2528 in Dilithium2, EUF-CMA, 2 x hex encoded, use address instead
+    uint8_t address[72]; //address is sha3-384, 48 bytes = 384 bits, what you send to get pay or pay //base58 enc usually 66 bytes, 72 to be sure
     //uint8_t signature[4840]; //sinature is always 2420 in Dilithium2, EUF-CMA, 2 x hex encoded
     char statement[256]; //bank statement of past transactions
     char balance[32]; //how much money in the account
 };
 
 struct bin_wallet {
-    uint8_t public_key[1312]; //public key is always 1312 in Dilithium2, EUF-CMA, secret hex encoded key used to secure funds
-    uint8_t private_key[2528]; //private key is always 2528 in Dilithium2, EUF-CMA, hex encoded, use address instead
+    uint8_t public_key[OQS_SIG_dilithium_2_length_public_key]; //public key is always 1312 in Dilithium2, EUF-CMA, secret hex encoded key used to secure funds
+    uint8_t private_key[OQS_SIG_dilithium_2_length_secret_key]; //private key is always 2528 in Dilithium2, EUF-CMA, hex encoded, use address instead
     uint8_t address[48]; //address is sha3-384, 48 bytes = 384 bits, what you send to get pay or pay //base58 enc 96 bytes
     //uint8_t signature[2420]; //sinature is always 2420 in Dilithium2, EUF-CMA
     char statement[256]; //bank statement of past transactions
@@ -57,15 +54,15 @@ struct bin_wallet {
 
 // Definition of a transaction that becomes part of a block
 struct transaction {
-    char sender[96]; //44 char address
-    char recipient[96]; //44 char address
-    double amount;
-    double miners_fee;
-    double moonshot_fee;
+    char sender[72]; //44 char address
+    char recipient[72]; //44 char address
+    long double amount;
+    long double miners_fee;
+    long double moonshot_fee;
     char data[1024]; //general data variable, bytecode for smart_contracts, journal paper, book, text message, (zlib compressed)
     int data_type;
     time_t timestamp;
-    uint8_t signature[2420];
+    uint8_t signature[OQS_SIG_dilithium_2_length_signature_hex];  //2420, not hex encoded, * 2 hex encoded + 1 null terminator
     //char input_transactions[50][256]; //a transaction can include multiple inputs, each of which is the output of a previous transaction.
     int confirmed; // the status of the transaction
     char txid[96]; //Sha3 - 384bit is 48 bytes x 2 for hexadecimal ecoding = 96, calculated using the SHA3-384 cryptographic hash function.
@@ -86,8 +83,8 @@ struct block {
 // Block reward
 struct coinbase_transaction {
     int block_height;
-    double block_reward;
-    double moonshot_reward;
+    int64_t block_reward;
+    int64_t moonshot_reward;
     char miner_address[128];
     char coinbase_data[4096];
     time_t timestamp;
@@ -96,23 +93,16 @@ struct coinbase_transaction {
 };
 
 //wallet.c
-BIGNUM* private_key();
-unsigned char* public_key(BIGNUM* private_key);
-void generate_new_address(uint8_t *public_key, uint8_t *address);
-//void generate_new_address(const unsigned char *public_key, unsigned char *address);
-void private_key_to_hex(BIGNUM *private_key_ptr, char hex_private_key[66]);
-void public_key_to_hex(unsigned char* public_key, char hex_public_key[66]);
-int generate_address();
+int generate_key_pair(uint8_t *public_key, uint8_t *private_key);
+int generate_new_address(uint8_t *public_key, uint8_t *address);
+int generate_address();  //Generate 5 pub/priv/address and store then in the wallet.db for use
 void print_table(const char* db_name, const char* table_name);
 static int callback(void *data, int argc, char **argv, char **col_name);
 int main();
 
-char* public_key_to_address(unsigned char* public_key, int public_key_len);
-
 //transactions.c
 int create_transaction();
-void sign_transaction(uint8_t *sender_address, uint8_t *receiver_address, double amount, uint8_t private_key[5056], uint8_t public_key[2624], uint8_t *signature);
-//void sign_transaction(const char *sender_address, const char *receiver_address, int amount, const char *private_key_b64, char **r_hex, char **s_hex);
+int sign_transaction(uint8_t *sender_address, uint8_t *receiver_address, long double amount, uint8_t private_key[5056], uint8_t public_key[2624], uint8_t *signature);
 void get_txid(struct transaction* tx);
 int compress_data(const char *data, int data_len, char **compressed_data, int *compressed_len);
 int decompress_data(const char *compressed_data, int compressed_len, char **decompressed_data, int *decompressed_data_len);
@@ -129,6 +119,10 @@ static int callback_count(void *transaction_bundle, int argc, char **argv, char 
 int start_blockchain();
 
 //verifications.c
+void cleanup_stack(uint8_t *secret_key, size_t secret_key_len);
+int validate_key_pair(uint8_t *public_key, uint8_t *private_key, size_t public_key_length, size_t private_key_length); //wallet, good keypair check
+int test_keys_in_wallet();
+
 int validate_transaction(struct transaction *t);
 int validate_block(struct block *b, int difficulty);
 int validate_blockchain(struct block *blocks, int num_blocks);
@@ -232,7 +226,5 @@ int ....()
 
     return 0;
 }
-
-//
 
 */
