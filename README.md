@@ -29,7 +29,7 @@ There is no expediency in the production of this blockchain, we shall understand
 
 <img align="right" src="https://github.com/Immortality-IMT/Manhattan-Project/blob/main/blockchain_cryptocurrency/screenshot_wallet.png" alt="Manhattan Project Blockchain Screenshot">
 
-Immortality Cryptocurrency
+Immortality Coin
 Homepage: https://imt.cx
 
 The project is broken up into separate parts and each are independent of each other. So work on what you want to work on. At release, we shall bring it all together.
