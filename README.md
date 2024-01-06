@@ -18,7 +18,7 @@ Along with a bankless financial infrastructure, Manhattan Group seeks to fund fu
 - Renewable energy, turn the world's deserts into solar power stations and 100% proof of work from renewables
 - More computer power, manufacture faster personal computers and offer them at great prices
 
-If you are interested in being part of the moderation of the project, join and discuss blockchain at our telegram https://t.me/immortality_IMT
+If you are interested in being part of the moderation of the project, contact us.
 
 #### Compile: make wallet node_discovery propagation vm
 The compilation produces execution files in each directory. Dilithium2 requires OQS lib, see below.
