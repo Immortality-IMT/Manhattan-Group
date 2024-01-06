@@ -8,7 +8,7 @@ We are DeSci, watch the video here... https://youtu.be/-DeMklVWNdA
 
 Along with a bankless financial infrastructure, Manhattan Group seeks to fund future technologies with blockchain and crypto. Technologies that unlock technologies, watershed technologies, upstream technologies such as AGI that have far-reaching upgrade potential. How?
 
-```We suggest doubling the miner's block reward and transaction fee to fund deSci. The extra miner's block reward comes with a restriction, it must be donated to watershed technologies.```
+```We suggest doubling the miner's block reward and transaction fee to fund DeSci. The extra miner's block reward comes with a restriction, it must be donated to watershed technologies.```
 
 #### Some projects that DeSci should prioritize
 - Open source A.I. such as GPT-Neo and GPT-J. Unsantized, uncensored, open source AGI.
