@@ -25,7 +25,7 @@ The compilation produces execution files in each directory. Dilithium2 requires 
 
 The whitepaper is being written at https://imt.cx/blockchain.html
 
-There is no expediency in the production of this blockchain, we shall understand and solve all the problems in the whitepaper before we begin codi#### ng.
+There is no expediency in the production of this blockchain, we shall understand and solve all the problems in the whitepaper before we begin coding.
 
 <img align="right" src="https://github.com/Immortality-IMT/Manhattan-Project/blob/main/blockchain_cryptocurrency/screenshot_wallet.png" alt="Manhattan Project Blockchain Screenshot">
 
