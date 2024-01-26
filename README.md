@@ -18,6 +18,9 @@ Along with a bankless financial infrastructure, Manhattan Group seeks to fund fu
 - Renewable energy, turn the world's deserts into solar power stations and 100% proof of work from renewables
 - More computer power, manufacture faster personal computers and offer them at great prices
 
+#### Consensus: PoUW
+Proof-of-Useful-Work (PoUW): A relatively new concept in blockchain technology that aims to address limitations of traditional Proof-of-Work (PoW) by using miners to perform computations with real-world value. Open A.I. infrastructure.
+
 If you are interested in being part of the moderation of the project, contact us.
 
 #### Compile: make wallet node_discovery propagation vm
