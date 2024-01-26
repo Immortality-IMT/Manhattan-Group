@@ -11,7 +11,7 @@ Along with a bankless financial infrastructure, Manhattan Group seeks to fund fu
 ```We suggest doubling the miner's block reward and transaction fee to fund DeSci. The extra miner's block reward comes with a restriction, it must be donated to watershed technologies.```
 
 #### Some projects that DeSci should prioritize
-- Open source A.I. such as GPT-Neo and GPT-J. Unsantized, uncensored, open source AGI.
+- Open infrastructure for building A.I. and Open source A.I. Unsanitized, uncensored, open source AGI.
 - The Big Brain Project - Dish brain projects
 - Space Tourism, indestructible human capsule guaranteeing safety
 - Cure Aging, live forever, cure cancer, feel good
