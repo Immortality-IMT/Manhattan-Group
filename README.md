@@ -19,7 +19,8 @@ Along with a bankless financial infrastructure, Manhattan Group seeks to fund fu
 - More computer power, manufacture faster personal computers and offer them at great prices
 
 #### Consensus: PoUW
-Proof-of-Useful-Work (PoUW): A relatively new concept in blockchain technology that aims to address limitations of traditional Proof-of-Work (PoW) by using miners to perform computations with real-world value. Contributes to an open A.I. infrastructure, distributed computing solving real world problems, building A.I. Resource intensive and profitable. 
+Proof-of-Useful-Work (PoUW): A relatively new concept in blockchain technology that aims to address limitations of traditional Proof-of-Work (PoW) by using miners to perform computations with real-world value. Contributes to an open A.I. infrastructure, distributed computing solving real world problems, building A.I. Resource intensive and profitable.
+
 Proof-of-Activity/Importance/Capacity - better nodes are preferred by criteria. Some minimum computing capacity or uptime to be preferenced in the network.
 
 If you are interested in being part of the moderation of the project, contact us.
