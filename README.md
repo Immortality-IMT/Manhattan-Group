@@ -2,7 +2,7 @@
 
 <img align="right" src="https://imt.cx/assets/img/logo/mhg.png" width="200" alt="Manhattan Group Blockchain">
 
-[Immortality Coin](https://imt.cx) is also backed by a dedicated blockchain. Code named: Manhattan Group.
+[Immortality Coin](https://imt.cx) is also backed by a dedicated blockchain. Code named: Manhattan Group. Not live.
 
 This is DeSci, learn more, watch the video: https://youtu.be/-DeMklVWNdA
 
