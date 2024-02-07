@@ -2,9 +2,16 @@
 
 <img align="right" src="https://imt.cx/assets/img/logo/mhg.png" width="200" alt="Manhattan Group Blockchain">
 
-[Immortality Coin](https://imt.cx) has a dedicated blockchain project. Code-name, Manhattan Group.
+[Immortality Coin](https://imt.cx) is also backed by a dedicated blockchain. Code named: Manhattan Group.
 
-We are DeSci, watch the video here... https://youtu.be/-DeMklVWNdA
+This is DeSci, learn more, watch the video: https://youtu.be/-DeMklVWNdA
+
+ 4 differences and advancements to blockchain.
+
+ 1. PoUW - Proof of Useful Work, mining is resource intensive and the proof of work is largely pointless. Proof of Useful Work hashes useful work such as building A.I.
+ 2. Miner's Dream - the blockchain is mined at a variable rate, resulting in consistently the highest profits for miners relative to other coins.
+ 3. Moonshots - a portion of the miner's fee is restricted and donated to worthy science endeavours.
+ 4. Programmable Wallets - wallets as smart contracts, so features like refunds, cooling-off periods, buyer protection and scam protection can be normal.
 
 Along with a bankless financial infrastructure, Manhattan Group seeks to fund future technologies with blockchain and crypto. Technologies that unlock technologies, watershed technologies, upstream technologies such as AGI that have far-reaching upgrade potential. How?
 
@@ -19,11 +26,7 @@ Along with a bankless financial infrastructure, Manhattan Group seeks to fund fu
 - More computer power, manufacture faster personal computers and offer them at great prices
 
 #### Consensus: PoUW
-Proof-of-Useful-Work (PoUW): A relatively new concept in blockchain technology that aims to address limitations of traditional Proof-of-Work (PoW) by using miners to perform computations with real-world value. Contributes to an open A.I. infrastructure, distributed computing solving real world problems, building A.I. Resource intensive and profitable.
-
-Proof-of-Activity/Importance/Capacity - better nodes are preferred by criteria. Some minimum computing capacity or uptime to be preferenced in the network.
-
-If you are interested in being part of the moderation of the project, contact us.
+Proof-of-Useful-Work (PoUW): A relatively new concept in blockchain technology that aims to address limitations of traditional Proof-of-Work (PoW) by using miners to perform computations with real-world value. Contributes to an open A.I. infrastructure, distributed computing solving real world problems, building A.I. Resource intensive and profitable. Proof-of-Activity/Importance/Capacity - better nodes are preferred by criteria. Some minimum computing capacity or uptime to be preferenced in the network.
 
 #### Compile: make wallet node_discovery propagation vm
 The compilation produces execution files in each directory. Dilithium2 requires OQS lib, see below.
