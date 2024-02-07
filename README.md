@@ -10,7 +10,7 @@ This is DeSci, learn more, watch the video: https://youtu.be/-DeMklVWNdA
 
  1. PoUW - Proof of Useful Work, mining is resource intensive and the proof of work is largely pointless. Proof of Useful Work hashes useful work such as building A.I.
  2. Miner's Dream - the blockchain is mined at a variable rate, resulting in consistently the highest profits for miners relative to other coins.
- 3. Moonshots - a portion of the miner's fee is restricted and donated to worthy science endeavours, so that sci-fi moonshot dialogue can accompany the crypto.
+ 3. Moonshots - a portion of the miner's fee is restricted and miners donate to worthy science endeavours, so that sci-fi moonshot dialogue can accompany the crypto.
  4. Programmable Wallets - wallets as smart contracts, so features like refunds, cooling-off periods, buyer protection and scam protection can be selected with transactions.
  5. Dilithium2 quantum resistance.
 
