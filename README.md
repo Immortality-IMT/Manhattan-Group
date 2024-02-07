@@ -6,7 +6,7 @@
 
 This is DeSci, learn more, watch the video: https://youtu.be/-DeMklVWNdA
 
- 4 differences and advancements to blockchain.
+ 5 differences and advancements to blockchain.
 
  1. PoUW - Proof of Useful Work, mining is resource intensive and the proof of work is largely pointless. Proof of Useful Work hashes useful work such as building A.I.
  2. Miner's Dream - the blockchain is mined at a variable rate, resulting in consistently the highest profits for miners relative to other coins.
