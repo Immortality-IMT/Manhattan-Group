@@ -2,17 +2,15 @@
 
 <img align="right" src="https://imt.cx/assets/img/logo/mhg.png" width="200" alt="Manhattan Group Blockchain">
 
-[Immortality Coin](https://imt.cx) is also backed by a dedicated blockchain. Code named: Manhattan Group. Not live.
-
-Run the makefile with make, requires Dilithium2 (see below)
+[Immortality Coin](https://imt.cx) is also backed by a dedicated blockchain. Code named: Manhattan Group. Not live. Run the makefile with make, requires Dilithium2 (see below)
 
 This is DeSci, learn more, watch the video: https://youtu.be/-DeMklVWNdA
 
- 5 differences and advancements to blockchain.
+This is 100% layer 1 blockchain programmed 100% in C. 5 differences and advancements to blockchain.
 
- 1. PoUW - Proof of Useful Work, mining is resource intensive and the proof of work is largely pointless. Proof of Useful Work hashes useful work such as building A.I.
+ 1. PoUW - Proof of Useful Work, mining is resource intensive and the proof of work is a waste. Proof of Useful Work hashes useful work such as building A.I.
  2. Miner's Dream - the blockchain is mined at a variable rate, resulting in consistently the highest profits for miners relative to other coins. Hash rate stabilization and no halving could mean earnings are consistent.
- 3. Moonshots - a portion of the miner's fee is restricted and miners donate to worthy science endeavours, so that sci-fi moonshot dialogue can accompany the crypto.
+ 3. Moonshots - a portion of the miner's fee is restricted and miners donate to worthy science endeavors, so that sci-fi moonshot dialogue can accompany the crypto.
  4. Programmable Wallets - wallets as smart contracts, so features like refunds, cooling-off periods, buyer protection and scam protection can be selected with transactions.
  5. Dilithium2 quantum resistance.
 
