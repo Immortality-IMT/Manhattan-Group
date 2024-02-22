@@ -4,7 +4,7 @@
 
 [Immortality Coin](https://imt.cx) is also backed by a dedicated blockchain. Code named: Manhattan Group. Not live.
 
-Run the makefile with make, requires Dilithium2
+Run the makefile with make, requires Dilithium2 (see below)
 
 This is DeSci, learn more, watch the video: https://youtu.be/-DeMklVWNdA
 
