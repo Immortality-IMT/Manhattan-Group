@@ -62,7 +62,7 @@ build:<br>
  mkdir build && cd build<br>
  cmake -GNinja -DBUILD_SHARED_LIBS=ON ..<br>
  ninja<br>
- ninja install<br>
+ sudo ninja install<br>
 
 if /usr/local/lib is not in $PATH<br>
  
