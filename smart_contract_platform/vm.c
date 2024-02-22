@@ -1,1492 +1,1078 @@
-/*
-C code defines a virtual machine to execute opcodes, specifically for smart contract execution. The opcodes that are executed by the VM are encoded in bytecode, which is a low-level, binary representation of the instructions that the VM should perform. The "execute_contract" function takes in bytecode as input and uses a loop and a switch statement to execute the corresponding opcode. The struct "evm_state" contains several arrays for storing data, such as the stack and memory, as well as several integer variables for storing information such as the stack pointer and balance. It does not access the blockchain, and it doesn't handle the interaction between smart contracts. Requires evm compatible bytecode to execute, paste it in smart_contract.bin in the currency directory. Get the bytecode from https://imt.cx/solc/ to test this.
+/*  
+  Implementation of a byecode executor
+  https://www.evm.codes/
 
-Compiler with: gcc -g -o vm vm.c -lm
-
-/// Note: The instruction set is not implemented ///
-
-https://imt.cx/solc/
-https://ethereum.org/en/developers/docs/evm/opcodes/
-https://www.evm.codes/?fork=merge
-http://ref.x86asm.net/coder32.html#x00
-https://github.com/crytic/evm-opcodes
+Not all commands are implemented, such as
+ 1) each case picks up the gas cost
+ 2) result return and error return
+ 3) blockchain specific commands
 */
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <stdint.h>
-#include <limits.h>
 #include <math.h>
 
-#define MAX_STACK_SIZE 1024 //to be removed in dynamic allocation
-#define MAX_MEMORY_SIZE 256000 //to be removed
+#include <inttypes.h>
 
-typedef unsigned long long uint256_t[4];
-
+//For mstore and mload
+typedef struct {
+    size_t size;
+    uint8_t* data;
+} Memory; 
 
 typedef struct {
-    int stack_pointer; //keep track of the current position in the stack array
-    int pc; //program counter, current position in the bytecode being executed.
-    int *stack; //store values that are pushed and popped during the execution
-    unsigned char *memory; //store values that are read or written during the execution
-    unsigned char *contract_bytecode; //store the bytecode of the contract
-    int memory_size;
-    size_t code_size;
-    int gas; //price of execution
-    int balance; //of the contract
-    int address; //address of the contract
+    int size;
+    int top;
+    int64_t* data;
+    Memory* memory;    //MSTORE
+    int64_t** storage; //SSTORE
+} Stack;
 
-//Values required for compilation but mostly not required
-  int origin;
-  int caller;
-  int * calldata;
-  int calldata_size;
-  int * code;
-  int gas_price;
-  int gas_limit;
-  int coinbase;
-  int timestamp;
-  int block_number;
-  int difficulty;
-  int value;
-  int storage[MAX_MEMORY_SIZE];
+Stack* stack_create(size_t initial_capacity) {
+    Stack* stack = (Stack*) malloc(sizeof(Stack));
+    if (stack == NULL) {
+        perror("Failed to allocate memory for stack");
+        exit(1);
+    }
 
-} evm_state;
+    stack->size = initial_capacity;
+    stack->top = -1;
+    stack->data = (int64_t*) malloc(initial_capacity * sizeof(int64_t));
+    if (stack->data == NULL) {
+        perror("Failed to allocate memory for stack data");
+        free(stack);
+        exit(1);
+    }
 
-//void revert(unsigned char* ost, unsigned int len);
-//bool static_call(uint32_t gas, uint32_t addr, unsigned char* arg_ost, uint32_t arg_len, unsigned char* ret_ost, uint32_t ret_len);
-//uint32_t read_next_u32(state_t* state);
+    stack->memory = malloc(sizeof(Memory)); // Allocate memory for the Memory instance
+    if (stack->memory == NULL) {
+        perror("Failed to allocate memory for memory in stack");
+        free(stack->data);
+        free(stack);
+        exit(1);
+    }
 
-void load_contract_from_file(const char * file_path, evm_state * state) {
+    stack->memory->size = 32; // Initialize with 32 bytes //MSTORE
+    stack->memory->data = (uint8_t*) malloc(stack->memory->size); //MSTORE
+    stack->storage = malloc(sizeof(int64_t*) * (stack->memory->size / 8)); //SSTORE
+    if (stack->storage == NULL || stack->memory->data == NULL) {
+        perror("Failed to allocate memory");
+        free(stack->memory->data);
+        free(stack->memory);
+        free(stack->data);
+        free(stack);
+        exit(1);
+    }
 
-  // Open the file
-  FILE * fp = fopen(file_path, "r");
-  if (!fp) {
-    printf("Error: unable to open file %s\n", file_path);
-    return;
-  }
+    // Initialize the storage mapping with NULL pointers
+    for (size_t i = 0; i < stack->memory->size / 8; ++i) {
+        stack->storage[i] = NULL;
+    }
 
-  // Determine the size of the file
-  fseek(fp, 0, SEEK_END);
-  state->code_size = ftell(fp);
-  rewind(fp);
-
-  // Allocate memory for the bytecode
-  state->contract_bytecode = (unsigned char * ) malloc(state->code_size + 1);
-  if (!state->contract_bytecode) {
-    printf("Error: unable to allocate memory for bytecode\n");
-    fclose(fp);
-    return;
-  }
-
-  // Read the bytecode from the file
-  size_t bytes_read = fread(state->contract_bytecode, sizeof(char), state->code_size, fp);
-  if (bytes_read != state->code_size) {
-    printf("Error: unexpected number of bytes read\n");
-    free(state->contract_bytecode);
-    fclose(fp);
-    return;
-  }
-
-  // Null-terminate the bytecode
-  state->contract_bytecode[state->code_size] = '\0';
-
-  // Close the file
-  fclose(fp);
+    return stack;
 }
 
-/**********
-Code assumes the stack stores integers and performs integer arithmetic, 
-A conversion function is required, as the stack stores hexadecimal values
-**********/
+void print_stack(Stack* stack) {
+    printf("Stack:\n");
+    for (int i = stack->top; i >= 0; i--) {
+        printf("%ld ", stack->data[i]);
+    }
+    printf("\n");
+}
 
-void run_evm(evm_state * state) {
-  state->pc = 0;
+int64_t** stack_get_storage_address(Stack* stack, int64_t key) {
+    // Convert the 256-bit key to a 32-byte address
+    uint8_t address[32];
+    for (size_t i = 0; i < 32; ++i) {
+        address[i] = (key >> (8 * (31 - i))) & 0xFF;
+    }
 
-  int a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p;
-
-    unsigned char opcode[2];
-
-  while (state->pc < state->code_size) {
-
-    opcode[0] = state->contract_bytecode[state->pc];
-    opcode[1] = state->contract_bytecode[state->pc + 1];
-    opcode[2] = '\0';
-
-    printf("%s - ", opcode);
-
-/* 
-   read the first hex value to find the case
-   read the second hex value to result in the hex value case
-   C switch case is restricted to integers/literals not 2 char (hex) conditions
-   Breaking up the hex is better than using countless if elses
-*/
-
-   switch (opcode[0]) { //unsigned char opcode
-      case '0': //[0] first hex literal, then nested [1] second 00, tolower ff
-
-
-        switch (opcode[1]) { //STOP
-            case '0': // STOP - halt execution	
-                printf("STOP instruction\n");
-                return;
+    // Find the corresponding storage address
+    int64_t** storage_address = &stack->storage[address[0]];
+    int64_t* temp_address = NULL;
+    for (size_t i = 1; i < 32; ++i) {
+        if (*storage_address == NULL) {
             break;
-            case '1': // ADD 	Addition operation
-                // get the two values from the stack
-                a = state->stack[state->stack_pointer - 2];
-                b = state->stack[state->stack_pointer - 1];
-
-                // perform the addition and store the result in the stack
-                state->stack[state->stack_pointer - 2] = a + b;
-
-                // update the stack pointer
-                state->stack_pointer--;
+        }
+        temp_address = &(*storage_address)[address[i]];
+        if (temp_address == NULL) {
             break;
-            case '2': // MUL 	Multiplication operation
-                // Pop two values from the stack
-                b = state->stack[--state->stack_pointer];
-                a = state->stack[--state->stack_pointer];
+        }
+        storage_address = &temp_address;
+    }
 
-                // Perform unsigned integer multiplication
-                int result = (unsigned int)a * (unsigned int)b;
+    return storage_address;
+}
 
-                // Push the result back to the stack
-                state->stack[state->stack_pointer++] = result;
-            break;
-            case '3': // SUB 	Subtraction operation
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = a - b;
-            break;
-            case '4': // DIV 	Integer division operation
-                // Pop the two values from the stack
-                /*uint256_t*/ b = state->stack[state->stack_pointer--];
-                /*uint256_t*/ a = state->stack[state->stack_pointer--];
+void stack_set_storage(Stack* stack, int64_t key, int64_t value) {
+    int64_t** storage_address = stack_get_storage_address(stack, key);
+    if (*storage_address == NULL) {
+        *storage_address = malloc(sizeof(int64_t));
+        if (*storage_address == NULL) {
+            perror("Failed to allocate memory for storage value");
+            exit(1);
+        }
+    }
+    **storage_address = value;
+}
 
-                // Perform the division operation
-                /*uint256_t*/ result = a / b;
+//Pushes
+void stack_push(Stack* stack, int64_t value) {
+    if (stack->top >= stack->size - 1) {
+        printf("Stack overflow! Increase the stack size.\n");
+        exit(1);
+    }
+    stack->data[++stack->top] = value;
+}
 
-                // Push the result back to the stack
-                state->stack[++state->stack_pointer] = result;
-            break;
-            case '5': // SDIV 	Signed integer division operation (truncated)
-                a = state->stack[--state->stack_pointer];
-                b = state->stack[--state->stack_pointer];
+//Pops
+int64_t stack_pop(Stack* stack) {
+    if (stack->top < 0) {
+        printf("POP: Stack underflow!\n");
+        exit(1);
+    }
+    return stack->data[stack->top--];
+}
 
+//Dups
+void stack_dup(Stack* stack, int x) {
+    if (stack->top < (x - 1)) {
+        printf("DUP%d: Stack underflow!\n", x);
+        exit(1);
+    }
+
+    int64_t a[x]; // Temporary array to store duplicated values
+
+    for (int i = 0; i < x; i++) {
+        a[i] = stack->data[stack->top - i];
+    }
+
+    for (int i = x - 1; i >= 0; i--) { // Push values back onto the stack in reverse order
+        stack_push(stack, a[i]);
+    }
+}
+
+//SWAP
+void stack_swap(Stack* stack, int x) {
+
+    if (stack->top < x) {
+        printf("SWAP%d: Stack underflow!\n", x);
+        exit(1);
+    }
+
+    int64_t a[x + 1]; // Temporary array to store swapped values
+
+    // Copy values from the stack to the temporary array
+    for (int i = 0; i <= x; i++) {
+        a[i] = stack->data[stack->top - i];
+    }
+
+    // Swap the values and put them back on the stack
+    for (int i = 0; i <= x; i++) {
+        stack->data[stack->top - i] = a[x - i];
+    }
+}
+
+void stack_LOG(Stack* stack, int topic_count) {
+
+    /*
+    LOG0: Requires 2 elements on the stack (offset and size).
+    LOG1: Requires 3 elements on the stack (offset, size, and 1 topic).
+    LOG2: Requires 4 elements on the stack (offset, size, and 2 topics).
+    LOG3: Requires 5 elements on the stack (offset, size, and 3 topics).
+    LOG4: Requires 6 elements on the stack (offset, size, and 4 topics).
+    */
+
+    // Check if there are enough elements on the stack before popping
+    if (stack->top + 1 < topic_count + 2) {  //init = -1
+        printf("LOG%d: Stack underflow!\n", topic_count);
+        exit(1);
+    }
+
+    int64_t offset = stack_pop(stack);
+    int64_t size = stack_pop(stack);
+
+    /* Check if the current execution context is from a STATICCALL (Byzantium fork)
+    // For simplicity, let's assume it's not a STATICCALL
+    if ( check if staticcall ) {
+        printf("LOGx is not allowed in a STATICCALL context.\n");
+        exit(1);
+    } */
+
+    // Read topics from the stack
+    int64_t topics[topic_count];
+    for (int i = 0; i < topic_count; i++) {
+        if(topic_count != 0) { // log0 has no topics
+        topics[i] = stack_pop(stack);
+        }
+    }
+
+    // Read the memory content
+    uint8_t* memory_data = stack->memory->data + offset;
+    uint8_t* memory_end = memory_data + size;
+
+    // Ensure memory range is valid
+    if (memory_data < stack->memory->data || memory_end > stack->memory->data + stack->memory->size) {
+        printf("Memory access out of bounds for LOGx.\n");
+        exit(1);
+    }
+
+    // Log the data and topics (for simplicity, just print them)
+    printf("LOGx (topics count: %d): Data:", topic_count);
+    for (uint8_t* ptr = memory_data; ptr < memory_end; ptr++) {
+        printf(" %02X", *ptr);
+    }
+    printf("\nTopics:");
+    for (int i = 0; i < topic_count; i++) {
+        printf(" %" PRId64, topics[i]);
+    }
+    printf("\n");
+}
+
+void stack_clear(Stack* stack) {
+    stack->top = -1;
+}
+
+void stack_destroy(Stack* stack) {
+    free(stack->data);
+    free(stack);
+}
+
+int64_t execute_bytecode(uint8_t* bytecode, size_t size, Stack* stack) {
+    uint8_t* pc = bytecode;
+    int64_t a = 0; int64_t b = 0; int64_t c = 0;
+    size_t length = size; // Use the 'size' parameter as 'length'
+
+    while (pc < bytecode + size) {
+        uint8_t opcode = *pc++;
+
+                //printf("\nwhile pc: %ld is < bytecode: %ld + size: %ld\n", (int64_t)*(pc), (int64_t)*(bytecode), size); //decimal version of the case: opcode
+
+        switch (opcode) {
+            case 0x00: //STOP
+                return stack->top; // Return the stack top and exit
+            case 0x01: // ADD
+                b = stack_pop(stack);
+                a = stack_pop(stack);
+                stack_push(stack, a + b);
+                break;
+            case 0x02: // MUL
+                b = stack_pop(stack);
+                a = stack_pop(stack);
+                stack_push(stack, a * b);
+                break;
+            case 0x03: // SUB
+                b = stack_pop(stack);
+                a = stack_pop(stack);
+                stack_push(stack, a - b);
+                break;
+            case 0x04: // DIV
+                b = stack_pop(stack);
+                a = stack_pop(stack);
                 // Check for division by zero
                 if (b == 0) {
-                // Handle division by zero error
-                // ...
+                // Division by zero error, e.g., throw an exception or return an error code
+                fprintf(stderr, "Error: Division by zero\n");
+                exit(1);
                 }
-
-                // Perform signed division and push the result back onto the stack
-                state->stack[state->stack_pointer++] = (a / b);
-            break;
-            case '6': // MOD 	Modulo remainder operation
-                //pop 2 values from the stack and perform a%b and push the result
-                b = state->stack[--state->stack_pointer];
-                a = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = a % b;
-            break;
-            case '7': // SMOD 	Signed modulo remainder operation
-                b = state->stack[--state->stack_pointer];
-                a = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = (a >= 0) ? (a % b) : ((b - 1 - ((-a - 1) % b)) % b);
-            break;
-            case '8': // ADDMOD 	Modulo addition operation
-                c = state->stack[--state->stack_pointer];
-                b = state->stack[--state->stack_pointer];
-                a = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = (a + b) % c;
-            break;
-            case '9': // MULMOD 	Modulo multiplication operation
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                c = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = (a * b) % c;
-            break;
-            case 'a': // EXP 	Exponential operation
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = pow(a, b);
-            break;
-            case 'b': // SIGNEXTEND 	Extend length of two's complement signed integer
-                b = state->stack[--state->stack_pointer];
-                int x = state->stack[--state->stack_pointer];
-                if (b < 1 || b > 32) {
-                    state->stack[state->stack_pointer++] = x;
-                    break;
+                stack_push(stack, a / b);
+                break;
+            case 0x05: // SDIV -  signed division 
+                b = stack_pop(stack);
+                a = stack_pop(stack);
+                // Check for division by zero
+                if (b == 0) {
+                // Handle division by zero error, e.g., throw an exception or return an error code
+                fprintf(stderr, "Error: Division by zero\n");
+                exit(1);
                 }
-                int size_b = b * 8;
-                int mask = (1 << (size_b - 1)) - 1;
-                int sign = x & (1 << (size_b - 1));
-                state->stack[state->stack_pointer++] = sign ? x | ~mask : x & mask;
-            break;
-            case 'c': //Unsed-Invalid
-                printf("0C - Unsed-Invalid\n");
-            break;
-            case 'd': //Unsed-Invalid
-                printf("0D - Unused-Invalid\n");
-            break;
-            case 'e': //Unsed-Invalid
-                printf("0E - Unused-Invalid\n");
-            break;
-            case 'f':  //Unsed-Invalid
-                printf("0F - Unused-Invalid\n");
-            break;
-        }
-
-
-      break; //0
-      case '1': //1
-
-
-        switch (opcode[1]) {
-            case '0': // LT 	Less-than comparison
-                b = state->stack[--state->stack_pointer];
-                a = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = (a < b) ? 1 : 0;
-            break;
-            case '1':  // GT 	Greater-than comparison
-                b = state->stack[--state->stack_pointer];
-                a = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = (a > b) ? 1 : 0;
-            break;
-            case '2': // SLT 	Signed less-than comparison
-                b = state->stack[--state->stack_pointer];
-                a = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = (a < b) ? 1 : 0;
-            break;
-            case '3':  // SGT 	Signed greater-than comparison
-                a = state->stack[--state->stack_pointer];
-                b = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = (a > b) ? 1 : 0;
-            break;
-            case '4': // EQ 	Equality comparison
-                a = state->stack[--state->stack_pointer];
-                b = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = (a == b) ? 1 : 0;
-            break;
-            case '5': // ISZERO 	Simple not operator
-                a = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = (a == 0) ? 1 : 0;
-            break;
-            case '6': // AND 	Bitwise AND operation
-                a = state->stack[--state->stack_pointer];
-                b = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = a & b;
-            break;
-            case '7': // OR 	Bitwise OR operation
-                a = state->stack[--state->stack_pointer];
-                b = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = a | b;
-            break;
-            case '8': // XOR 	Bitwise XOR operation
-                a = state->stack[--state->stack_pointer];
-                b = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = a ^ b;
-            break;
-            case '9': // NOT 	Bitwise NOT operation
-                a = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = ~a;
-            break;
-            case 'a':  // BYTE 	Retrieve single byte from word
-                a = state->stack[--state->stack_pointer];
-                b = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = (b >> (248 - a * 8)) & 0xFF;
-            break;
-            case 'b': // SHL 	    Shift Left
-                a = state->stack[--state->stack_pointer];
-                b = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = b << a;
-            break;
-            case 'c': // SHR 	    Logical Shift Right
-                b = state->stack[--state->stack_pointer];
-                a = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = a >> b;
-            break;
-            case 'd': // SAR 	    Arithmetic Shift Right
-                a = state->stack[--state->stack_pointer];
-                b = state->stack[--state->stack_pointer];
-                state->stack[state->stack_pointer++] = b >> a;
-            break;
-            case 'e': //Unsed-Invalid
-                printf("1E - Unused-Invalid\n");
-            break;
-            case 'f': //Unsed-Invalid
-                printf("1F - Unused-Invalid\n");
-            break;
-        }
-
-
-      break; //1
-      case '2': //2
-
-
-        switch (opcode[1]) {
-            case '0': // KECCAK256 	Compute Keccak-256 hash (Currently not coded)
-                a = state->stack[--state->stack_pointer];
-                b = state->stack[--state->stack_pointer];
-                u_int8_t *mem = state->memory;
-                unsigned char keccak_res[32];
-
-                //Add implementation for keccak256 function
-                //keccak256(keccak_res, mem + b, a);
-
-                //Push result to stack
-                //memcpy(state->stack + state->stack_pointer, keccak_res, 32);
-                //state->stack_pointer += 32 / sizeof(int);
-            break;
-            case '1':
-                printf("21 - Unused-Invalid\n");
-            break;
-            case '2':
-                printf("22 - Unused-Invalid\n");
-            break;
-            case '3':
-                printf("23 - Unused-Invalid\n");
-            break;
-            case '4':
-                printf("24 - Unused-Invalid\n");
-            break;
-            case '5':
-                printf("25 - Unused-Invalid\n");
-            break;
-            case '6':
-                printf("26 - Unused-Invalid\n");
-            break;
-            case '7':
-                printf("27 - Unused-Invalid\n");
-            break;
-            case '8':
-                printf("28 - Unused-Invalid\n");
-            break;
-            case '9':
-                printf("29 - Unused-Invalid\n");
-            break;
-            case 'a':
-                printf("2A - Unused-Invalid\n");
-            break;
-            case 'b':
-                printf("2B - Unused-Invalid\n");
-            break;
-            case 'c':
-                printf("2C - Unused-Invalid\n");
-            break;
-            case 'd':
-                printf("2D - Unused-Invalid\n");
-            break;
-            case 'e':
-                printf("2E - Unused-Invalid\n");
-            break;
-            case 'f':
-                printf("2F - Unused-Invalid\n");
-            break;
-        }
-
-
-      break; //2
-      case '3': //3
-
-
-        switch (opcode[1]) {
-            case '0': // ADDRESS 	Get address of currently executing account (Currently not coded)
-                /*uint8_t address[32];
-                  get_address(address); //not coded
-
-                // Push address to stack
-                memcpy(state->stack + state->stack_pointer, address, 32);
-                state->stack_pointer += 32 / sizeof(uint256_t);
-                */
-            break;
-            case '1': // BALANCE 	Get balance of the given account
-                //These are not instruction set functions and therefore are not coded yet
-                /*
-                uint8_t addr[32];
-                uint256_t balance;
-
-                // Pop address from stack
-                memcpy(addr, state->stack + state->stack_pointer - 32 / sizeof(uint256_t), 32);
-                state->stack_pointer -= 32 / sizeof(uint256_t);
-
-                // TODO: Add implementation for getting balance of address 'addr'
-                balance = get_balance(addr);
-
-                // Push balance to stack
-                memcpy(state->stack + state->stack_pointer, &balance, 32);
-                state->stack_pointer += 32 / sizeof(uint256_t);
-
-                a = state -> stack[--state -> stack_pointer];
-                //TODO: Implement getting balance of given account
-                */
-            break;
-            case '2': // ORIGIN 	Get execution origination address
-                //uint256_t origin;
-
-                // TODO: Add implementation to get the origin of the transaction
-
-                // Push result to stack
-                //memcpy(state->stack + state->stack_pointer, &origin, 32);
-                //state->stack_pointer += 32 / sizeof(uint256_t);
-            break;
-            case '3': // CALLER 	Get caller address
-                state -> stack[state -> stack_pointer++] = state -> caller;
-            break;
-            case '4': // CALLVALUE 	Get deposited value by the instruction/transaction responsible for this execution
-                state -> stack[state -> stack_pointer++] = state -> value;
-            break;
-            case '5': // CALLDATALOAD 	Get input data of current environment
-                a = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = state -> calldata[a];
-            break;
-            case '6': // CALLDATASIZE 	Get size of input data in current environment
-                state -> stack[state -> stack_pointer++] = state -> calldata_size;
-            break;
-            case '7': // CALLDATACOPY 	Copy input data in current environment to memory
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                c = state -> stack[--state -> stack_pointer];
-                memcpy( & state -> memory[c], & state -> calldata[b], a);
-            break;
-            case '8': // CODESIZE 	Get size of code running in current environment
-                state -> stack[state -> stack_pointer++] = state -> code_size;
-            break;
-            case '9': // CODECOPY 	Copy code running in current environment to memory
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                c = state -> stack[--state -> stack_pointer];
-                memcpy( & state -> memory[c], & state -> code[b], a);
-            break;
-            case 'a': // GASPRICE 	Get price of gas in current environment
-                state -> stack[state -> stack_pointer++] = state -> gas_price;
-            break;
-            case 'b': // EXTCODESIZE 	Get size of an account's code
-                a = state -> stack[--state -> stack_pointer];
-                //TODO: Implement getting size of code of an account
-            break;
-            case 'c': // EXTCODECOPY 	Copy an account's code to memory
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                c = state -> stack[--state -> stack_pointer];
-                //TODO: Implement copying code of an account to memory
-            break;
-            case 'd': // RETURNDATASIZE 	Pushes the size of the return data buffer onto the stack
-                printf("RETURNDATASIZE todo\n");
-            break;
-            case 'e': // RETURNDATACOPY 	Copies data from the return data buffer to memory
-                printf("RETURNDATACOPY todo\n");
-            break;
-            case 'f': // EXTCODEHASH 	Returns the keccak256 hash of a contract's code
-                printf("EXTCODEHASH todo\n");
-            break;
-        }
-
-
-      break;
-      case '4': // 4
-
-
-        switch (opcode[1]) {
-            case '0': // BLOCKHASH 	Get the hash of one of the 256 most recent complete blocks
-                a = state -> stack[--state -> stack_pointer];
-                //TODO: Implement getting the hash of one of the 256 most recent complete blocks
-            break;
-            case '1': // COINBASE 	Get the block's beneficiary address
-                state -> stack[state -> stack_pointer++] = state -> coinbase;
-            break;
-            case '2': // TIMESTAMP 	Get the block's timestamp
-                state -> stack[state -> stack_pointer++] = state -> timestamp;
-            break;
-            case '3': // NUMBER 	Get the block's number
-                state -> stack[state -> stack_pointer++] = state -> block_number;
-            break;
-            case '4': // DIFFICULTY 	Get the block's difficulty ??? Could be 44	PREVRANDAO, randomnes
-                state -> stack[state -> stack_pointer++] = state -> difficulty;
-            break;
-            case '5': // GASLIMIT 	Get the block's gas limit
-                state -> stack[state -> stack_pointer++] = state -> gas_limit;
-            break;
-            case '6': //46	CHAINID 	Returns the current chain’s EIP-155 unique identifier
-                printf("CHAINID  todo\n");
-            break;
-            case '7': //47	SELFBALANCE	.	address(this).balance		balance of executing contract
-                printf("SELFBALANCE\n");
-            break;
-            case '8': // BASEFEE 	Returns the value of the base fee of the current block it is executing in
-                printf("BASEFEE todo\n");
-            break;
-            case '9': // Unused-Invalid
-                printf("49 Unused-Invalid\n");
-            break;
-            case 'a': // Unused-Invalid
-                printf("4A Unused-Invalid\n");
-            break;
-            case 'b': // Unused-Invalid
-                printf("4B Unused-Invalid\n");
-            break;
-            case 'c': // Unused-Invalid
-                printf("4C Unused-Invalid\n");
-            break;
-            case 'd': // Unused-Invalid
-                printf("4D Unused-Invalid\n");
-            break;
-            case 'e': // Unused-Invalid
-                printf("4E Unused-Invalid\n");
-            break;
-            case 'f': // Unused-Invalid
-                printf("4F Unused-Invalid\n");
-            break;
-        }
-        break; //4
-
-
-      case '5': // 5
-        switch (opcode[1]) {
-
-
-            case '0':// POP 	Remove word from stack
-                --state->stack_pointer;
-                //state -> stack_pointer--; functionally equivilant
-            break;
-            case '1': // MLOAD 	Load word from memory (not working)
-                /* int ost = state->stack[--state->stack_pointer];
-                //uint256_t result;
-                int result;
-                memcpy(result, state->memory + ost, 32);
-                state->stack[state->stack_pointer++] = result;
-                */
-            break;
-            case '2': // MSTORE 	Save word to memory
-            /*
-                int ost = state->stack[--state->stack_pointer];
-                uint256_t val = state->stack[--state->stack_pointer];
-                memcpy(state->memory + ost, &val, 32);
-            */
-            break;
-            case '3': // MSTORE8 	Save byte to memory
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> memory[a] = (state -> memory[a] & 0xFFFFFF00) | (b & 0xFF);
-            break;
-            case '4': // SLOAD 	Load word from storage
-                a = state -> stack[--state -> stack_pointer];
-                state -> stack[state -> stack_pointer++] = state -> storage[a];
-            break;
-            case '5': // SSTORE 	Save word to storage
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                state -> storage[a] = b;
-            break;
-            case '6': // JUMP 	Alter the program counter
-                a = state -> stack[--state -> stack_pointer];
-                //TODO: Implement jump to destination
-            break;
-            case '7': // JUMPI 	Conditionally alter the program counter
-                a = state -> stack[--state -> stack_pointer];
-                b = state -> stack[--state -> stack_pointer];
-                if (b != 0) {
-                    //TODO: Implement jump to destination
+                // Perform signed division and handle overflow
+                int64_t result = a / b;
+                if ((a ^ b) < 0 && (a % b != 0)) {
+                result = -((-(a - (a % b))) / b);
                 }
-            break;
-            case '8': // GETPC 	Get the value of the program counter prior to the increment
-                state -> stack[state -> stack_pointer++] = state->pc;
-            break;
-            case '9': // MSIZEMSIZE 	Get the size of active memory in bytes
-                state -> stack[state -> stack_pointer++] = state -> memory_size;
-            break;
-            case 'a':  // GAS 	Get the amount of available gas, including the corresponding reduction for the cost of this instruction
-                state -> stack[state -> stack_pointer++] = state -> gas;
-            break;
-            case 'b': /// JUMPDEST 	Mark a valid destination for jumps
-                //TODO:  /* This opcode has no effect on the stack or memory, its sole purpose is to mark a valid jump destination. */
-            break;
-            case 'c': // Invalid
-                printf("Invalid\n");
-            break;
-            case 'd': // Invalid
-                printf("Invalid\n");
-            break;
-            case 'e': // Invalid
-                printf("Invalid\n");
-            break;
-            case 'f': // Invalid
-                printf("Invalid\n");
-            break;
-        }
-        break;
-
-
-      case '6': // 6
-        switch (opcode[1]) {
-
-
-            case '0': { // 60	PUSH1	3	.	uint8		push 1-byte value onto stack
-                        uint8_t value = state->code[state->pc + 1];
-                        state->stack[++state->stack_pointer] = value;
-                        state->pc += 2;
-
-                        //state->stack[state->stack_pointer++] = state->contract_bytecode[state->pc++];
-                      }
-            break;
-            case '1': { // 61	PUSH2	3	.	uint16		push 2-byte value onto stack
-                        uint16_t value = (state->code[state->pc + 1] << 8) | state->code[state->pc + 2];
-                        state->stack[++state->stack_pointer] = value;
-                        state->pc += 3;
-                      }
-            break;
-            case '2': { // 62	PUSH3	3	.	uint24		push 3-byte value onto stack	
-                        uint32_t value = 0;
-                        for (int i = 0; i < 3; i++) {
-                            value = (value << 8) | *(state->code + state->pc++);
-                        }
-                        state->stack[state->stack_pointer++] = value;
-                      }
-            break;
-            case '3': { // 63	PUSH5	3	.	uint40		push 5-byte value onto stack
-                        uint8_t byte1 = state->contract_bytecode[state->pc++];
-                        uint8_t byte2 = state->contract_bytecode[state->pc++];
-                        uint8_t byte3 = state->contract_bytecode[state->pc++];
-                        uint8_t byte4 = state->contract_bytecode[state->pc++];
-
-                        uint32_t value = (byte4 << 24) | (byte3 << 16) | (byte2 << 8) | byte1;
-                        state->stack[state->stack_pointer++] = value;
-                      }
-            break;
-            case '4': { // 64	PUSH6	3	.	uint48		push 6-byte value onto stack
-                        uint32_t value1 = state->contract_bytecode[state->pc++];
-                        uint32_t value2 = state->contract_bytecode[state->pc++];
-                        uint32_t value3 = state->contract_bytecode[state->pc++];
-                        uint32_t value4 = state->contract_bytecode[state->pc++];
-                        uint32_t pushValue = (value4 << 24) | (value3 << 16) | (value2 << 8) | value1;
-                        state->stack[state->stack_pointer++] = pushValue;
-                      }
-            break;
-            case '5': { // 65	PUSH7	3	.	uint56		push 7-byte value onto stack
-                        uint32_t value1 = state->contract_bytecode[state->pc++];
-                        uint32_t value2 = state->contract_bytecode[state->pc++];
-                        uint32_t value3 = state->contract_bytecode[state->pc++];
-                        uint32_t value4 = state->contract_bytecode[state->pc++];
-                        uint32_t value5 = state->contract_bytecode[state->pc++];
-                        uint64_t pushValue = ((uint64_t)value5 << 32) | ((uint64_t)value4 << 24) | (value3 << 16) | (value2 << 8) | value1;
-                        state->stack[state->stack_pointer++] = pushValue;
-                      }
-            break;
-            case '6': { // 66	PUSH8	3	.	uint64		push 8-byte value onto stack
-                        uint64_t value = 0;
-                        for (int i = 0; i < 6; i++) {
-                        value |= (uint64_t)state->contract_bytecode[state->pc + i + 1] << (8 * (5 - i));
-                        }
-                        state->stack[state->stack_pointer++] = value;
-                        state->pc += 6;
-                     }
-            break;
-            case '7': { // 67	PUSH9	3	.	uint72		push 9-byte value onto stack
-                        uint64_t value = 0;
-                        for (int i = 0; i < 8; i++) {
-                        value |= (uint64_t)state->contract_bytecode[state->pc + i + 1] << (8 * (7 - i));
-                        }
-                        state->stack[state->stack_pointer++] = value;
-                        state->pc += 8;
-                     }
-            break;
-            case '8': //{ // 68	PUSH todo0	3	.	uint80		push 10-byte value onto stack	
-                   /*     uint72_t value = 0;
-                        for (int i = 0; i < 9; i++) {
-                        value |= (uint72_t)state->contract_bytecode[state->pc + i + 1] << (8 * (8 - i));
-                        }
-                        state->stack[state->stack_pointer++] = value;
-                        state->pc += 9;
-                     }
-                    */
-            break;
-            case '9': // 69	PUSH todo0	3	.	uint80		push 10-byte value onto stack	
-                printf("PUSH9 todo\n");
-            break;
-            case 'a': // 6A	PUSH todo1	3	.	uint88		push 11-byte value onto stack
-                printf("PUSH10 todo\n");
-            break;
-            case 'b': // 6B	PUSH todo2	3	.	uint96		push 12-byte value onto stack
-                printf("PUSH11 todo\n");
-            break;
-            case 'c': // 6C	PUSH todo3	3	.	uint104		push 13-byte value onto stack
-                printf("PUSH12 todo\n");
-            break;
-            case 'd': // 6D	PUSH todo4	3	.	uint112		push 14-byte value onto stack
-                printf("PUSH13 todo\n");
-            break;
-            case 'e': // 6E	PUSH todo5	3	.	uint120		push 15-byte value onto stack
-                printf("PUSH14 todo\n");
-            break;
-            case 'f': // 6F	PUSH todo6	3	.	uint128		push 16-byte value onto stack	
-                printf("PUSH15 todo\n");
-            break;
-        }
-        break; //6
-
-
-      case '7': // 7
-        switch (opcode[1]) {
-
-            case '0': // 70	PUSH17	3	.	uint136		push 17-byte value onto stack
-                printf("Push 17 todo\n");
-            break;
-            case '1': // 71	PUSH18	3	.	uint144		push 18-byte value onto stack
-                printf("PUSH 18 todo\n");
-            break;
-            case '2': // 72	PUSH19	3	.	uint152		push 19-byte value onto stack
-                printf("PUSH 19 todo\n");
-            break;
-            case '3': // 73	PUSH20	3	.	uint160		push 20-byte value onto stack
-                printf("PUSH 20 todo\n");
-            break;
-            case '4': // 74	PUSH21	3	.	uint168		push 21-byte value onto stack	
-                printf("PUSH 21 todo\n");
-            break;
-            case '5': // 75	PUSH22	3	.	uint176		push 22-byte value onto stack
-                printf("PUSH 22 todo\n");
-            break;
-            case '6': // 76	PUSH23	3	.	uint184		push 23-byte value onto stack
-                printf("PUSH 23 todo\n");
-            break;
-            case '7': // 77	PUSH24	3	.	uint192		push 24-byte value onto stack
-                printf("PUSH 24 todo\n");
-            break;
-            case '8': // 78	PUSH25	3	.	uint200		push 25-byte value onto stack
-                printf("PUSH 25 todo\n");
-            break;
-            case '9': // 79	PUSH26	3	.	uint208		push 26-byte value onto stack
-                printf("PUSH 26 todo\n");
-            break;
-            case 'a': // 7A	PUSH27	3	.	uint216		push 27-byte value onto stack
-                printf("PUSH 27 todo\n");
-            break;
-            case 'b': // 7B	PUSH28	3	.	uint224		push 28-byte value onto stack
-                printf("PUSH 28 todo\n");
-            break;
-            case 'c': // 7C	PUSH29	3	.	uint232		push 29-byte value onto stack
-                printf("PUSH 29 todo\n");
-            break;
-            case 'd': // 7D	PUSH30	3	.	uint240		push 30-byte value onto stack
-                printf("PUSH 30 todo\n");
-            break;
-            case 'e': // 7E	PUSH31	3	.	uint248		push 31-byte value onto stack
-                printf("PUSH 31 todo\n");
-            break;
-            case 'f': // { // 7F	PUSH32	3	.	uint256		push 32-byte value onto stack	
-             /*   unsigned long long pushValue = 0;
-                for (int i = 0; i < 8; i++) {
-                    pushValue |= (unsigned long long)value[i] << (56 - 8 * i);
+                stack_push(stack, result);
+                break;
+            case 0x06: // MOD
+                b = stack_pop(stack);
+                a = stack_pop(stack);
+                // Check for division by zero
+                if (b == 0) {
+                // Division by zero error, e.g., throw an exception or return an error code
+                fprintf(stderr, "Error: Division by zero\n");
+                exit(1);
                 }
-                state->stack[state->stack_pointer++] = pushValue;
-                } */
-            break;
-        }
-        break;
-
-
-      case '8': // 8
-        switch (opcode[1]) {
-
-
-            case '0': { // 80	DUP1	3	a	a, a		clone 1st value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 1];
-                        state->stack[state->stack_pointer] = a;
-                      }
-            break;
-            case '1': { // 81	DUP2	3	_, a	a, _, a		clone 2nd value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 2];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 2; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 2] = a;
-                       }
-            break;
-            case '2': { // 82	DUP3	3	_, _, a	a, _, _, a		clone 3rd value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 3];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 3; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 3] = a;
-                      }
-            break;
-            case '3': { // 83	DUP4	3	_, _, _, a	a, _, _, _, a		clone 4th value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 4];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 4; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 4] = a;
-                      }
-            break;
-            case '4': { // 84	DUP5	3	..., a	a, ..., a		clone 5th value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 5];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 5; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 5] = a;
-                      }
-            break;
-            case '5': { // 85	DUP6	3	..., a	a, ..., a		clone 6th value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 6];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 6; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 6] = a;
-                      }
-            break;
-            case '6': { // 86	DUP7	3	..., a	a, ..., a		clone 7th value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 7];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 7; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 7] = a;
-                      }
-            break;
-            case '7': { // 87	DUP8	3	..., a	a, ..., a		clone 8th value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 8];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 8; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 8] = a;
-                      }
-            break;
-            case '8': { // 88	DUP9	3	..., a	a, ..., a		clone 9th value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 9];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 9; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 9] = a;
-                      }
-            break;
-            case '9': { // 89	DUP10	3	..., a	a, ..., a		clone 10th value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 10];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 10; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 10] = a;
-                      }
-            break;
-            case 'a': { // 8A	DUP11	3	..., a	a, ..., a		clone 11th value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 11];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 11; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 11] = a;
-                      }
-            break;
-            case 'b': { // 8B	DUP12	3	..., a	a, ..., a		clone 12th value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 12];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 12; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 12] = a;
-                      }
-            break;
-            case 'c': { // 8C	DUP13	3	..., a	a, ..., a		clone 13th value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 13];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 13; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 13] = a;
-                      }
-            break;
-            case 'd': { // 8D	DUP14	3	..., a	a, ..., a		clone 14th value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 14];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 14; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 14] = a;
-                      }
-            break;
-            case 'e': { // 8E	DUP15	3	..., a	a, ..., a		clone 15th value on stack
-                        uint16_t a = state->stack[state->stack_pointer - 15];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 15; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 15] = a;
-                      }
-            break;
-            case 'f': { // 8F	DUP16	3	..., a	a, ..., a
-                        uint16_t a = state->stack[state->stack_pointer - 16];
-                        for (int i = state->stack_pointer; i >= state->stack_pointer - 16; i--) {
-                            state->stack[i] = state->stack[i - 1];
-                        }
-                        state->stack[state->stack_pointer - 16] = a;
-                      }
-            break;
-        }
-        break;
-
-
-      case '9': // 9
-        switch (opcode[1]) {
-
-
-            case '0': /// SWAP1 	Exchange 1st and 2nd stack items
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                state->stack[state->stack_pointer - 1] = state->stack[state->stack_pointer - 2];
-                state->stack[state->stack_pointer - 2] = a;
-            }
-            break;
-            case '1': // SWAP2 	Exchange 1st and 3rd stack items
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                uint16_t b = state->stack[state->stack_pointer - 3];
-                state->stack[state->stack_pointer - 1] = b;
-                state->stack[state->stack_pointer - 3] = a;
-            }
-            break;
-            case '2':  // SWAP3 	Exchange 1st and 4th stack items
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 3; i--) {
-                    state->stack[i] = state->stack[i - 1];
+                stack_push(stack, a % b);
+                break;
+            case 0x07: // SMOD
+                b = stack_pop(stack);
+                a = stack_pop(stack);
+                // Check for division by zero
+                if (b == 0) {
+                // Division by zero error, e.g., throw an exception or return an error code
+                fprintf(stderr, "Error: Division by zero\n");
+                exit(1);
                 }
-                state->stack[state->stack_pointer - 3] = a;
-            }
-            break;
-            case '3': // SWAP4 	Exchange 1st and 5th stack items
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 4; i--) {
-                    state->stack[i] = state->stack[i - 1];
+                // Perform signed modulo and handle overflow
+                result = a % b;
+                if ((a ^ b) < 0 && (a % b != 0)) {
+                result = (-a / b) * b + a;
                 }
-                state->stack[state->stack_pointer - 4] = a;
-            }
-            break;
-            case '4': // SWAP5 	Exchange 1st and 6th stack items
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 5; i--) {
-                    state->stack[i] = state->stack[i - 1];
+                stack_push(stack, result);
+                break;
+            case 0x08: // ADDMOD
+                c = stack_pop(stack);
+                b = stack_pop(stack);
+                a = stack_pop(stack);
+                // Check for modulo by zero
+                if (c == 0) {
+                // Modulo by zero error, e.g., throw an exception or return an error code
+                fprintf(stderr, "Error: Modulo by zero\n");
+                exit(1);
                 }
-                state->stack[state->stack_pointer - 5] = a;
-            }
-            break;
-            case '5': // SWAP6 	Exchange 1st and 7th stack items
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 6; i--) {
-                    state->stack[i] = state->stack[i - 1];
+                // Perform addition and then modulo
+                result = (a + b) % c;
+                stack_push(stack, result);
+                break;
+            case 0x09: // MULMOD
+                c = stack_pop(stack);
+                b = stack_pop(stack);
+                a = stack_pop(stack);
+                // Check for modulo by zero
+                if (c == 0) {
+                // Modulo by zero error, e.g., throw an exception or return an error code
+                fprintf(stderr, "Error: Modulo by zero\n");
+                exit(1);
                 }
-                state->stack[state->stack_pointer - 6] = a;
-            }
-            break;
-            case '6': // SWAP7 	Exchange 1st and 8th stack items
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 7; i--) {
-                    state->stack[i] = state->stack[i - 1];
-                }
-                state->stack[state->stack_pointer - 7] = a;
-            }
-            break;
-            case '7': // SWAP8 	Exchange 1st and 9th stack items
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 8; i--) {
-                    state->stack[i] = state->stack[i - 1];
-                }
-                state->stack[state->stack_pointer - 8] = a;
-            }
-            break;
-            case '8': // SWAP9
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 9; i--) {
-                    state->stack[i] = state->stack[i - 1];
-                }
-                state->stack[state->stack_pointer - 9] = a;
-            }
-            break;
-            case '9': // SWAP10
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 10; i--) {
-                    state->stack[i] = state->stack[i - 1];
-                }
-                state->stack[state->stack_pointer - 10] = a;
-            }
-            break;
-            case 'a': // SWAP11
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 11; i--) {
-                    state->stack[i] = state->stack[i - 1];
-                }
-                state->stack[state->stack_pointer - 11] = a;
-            }
-            break;
-            case 'b': // SWAP12
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 12; i--) {
-                    state->stack[i] = state->stack[i - 1];
-                }
-                state->stack[state->stack_pointer - 12] = a;
-            }
-            break;
-            case 'c': // SWAP13
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 13; i--) {
-                    state->stack[i] = state->stack[i - 1];
-                }
-                state->stack[state->stack_pointer - 13] = a;
-            }
-            break;
-            case 'd': // SWAP14
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 14; i--) {
-                    state->stack[i] = state->stack[i - 1];
-                }
-                state->stack[state->stack_pointer - 14] = a;
-            }
-            break;
-            case 'e': // SWAP15
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 15; i--) {
-                    state->stack[i] = state->stack[i - 1];
-                }
-                state->stack[state->stack_pointer - 15] = a;
-            }
-            break;
-            case 'f':  // SWAP16
-            {
-                uint16_t a = state->stack[state->stack_pointer - 1];
-                for (int i = state->stack_pointer - 1; i >= state->stack_pointer - 16; i--) {
-                    state->stack[i] = state->stack[i - 1];
-                }
-                state->stack[state->stack_pointer - 16] = a;
-            }
-            break;
-        }
-        break;
-
-
-      case 'a': //a
-        switch (opcode[1]) {
-
-
-            case '0': // A0	LOG0	A8	ost, len	.		LOG0(memory[ost:ost+len-1])	
-            {
-             //   uint32_t ost = read_next_u32(state);
-              //  uint32_t len = read_next_u32(state);
-               // log0(&state->contract_bytecode[ost], len);
-            }
-            break;
-            case '1': // A1	LOG1	A8	ost, len, topic0	.		LOG1(memory[ost:ost+len-1], topic0)
-                printf("LOG1 todo\n");
-            break;
-            case '2': // A2	LOG2	A8	ost, len, topic0, topic1	.		LOG1(memory[ost:ost+len-1], topic0, topic1)
-                printf("LOG2 todo\n");
-            break;
-            case '3': // A3	LOG3	A8	ost, len, topic0, topic1, topic2	.		LOG1(memory[ost:ost+len-1], topic0, topic1, topic2)
-                printf("LOG3 todo\n");
-            break;
-            case '4': // A4	LOG4	A8	ost, len, topic0, topic1, topic2, topic3	.		LOG1(memory[ost:ost+len-1], topic0, topic1, topic2, topic3)
-                printf("LOG4 todo\n");
-            break;
-            case '5': // Unused
-                printf("A5 Unused\n");
-            break;
-            case '6': // Unused
-                printf("A6 Unused\n");
-            break;
-            case '7': // Unused
-                printf("A7 Unused\n");
-            break;
-            case '8': // Unused
-                printf("A8 Unused\n");
-            break;
-            case '9': // Unused
-                printf("A9 Unused\n");
-            break;
-            case 'a': // Unused
-                printf("AA Unused\n");
-            break;
-            case 'b': // Unused
-                printf("AB Unused\n");
-            break;
-            case 'c': // Unused
-                printf("AC Unused\n");
-            break;
-            case 'd': // Unused
-                printf("AD Unused\n");
-            break;
-            case 'e': // Unused
-                printf("AE Unused\n");
-            break;
-            case 'f': // Unused
-                printf("AF Unused\n");
-            break;
-        }
-        break; //a
-
-
-      case 'b': //b
-        switch (opcode[1]) { 
-
-
-            case '0': // JUMPTO 	Tentative libevmasm has different numbers 	EIP 615 
-                printf("JUMPTO todo\n");
-            break;
-            case '1': // JUMPIF 	Tentative 	EIP 615 
-                printf("JUMPIF todo\n");
-            break;
-            case '2': // JUMPSUB 	Tentative 	EIP 615
-                printf("JUMPSUB\n");
-            break;
-            case '3': // Unused
-                printf("B3 Unused\n");
-            break;
-            case '4': // JUMPSUBV 	Tentative 	EIP 615 
-                printf("JUMPSUBV\n");
-            break;
-            case '5': // BEGINSUB 	Tentative 	EIP 615 
-                printf("BEGINSUB todo\n");
-            break;
-            case '6': // BEGINDATA 	Tentative 	EIP 615 	
-                printf("BEGINDATA todo\n");
-            break;
-            case '7': // Unused
-                printf("Unused\n");
-            break;
-            case '8': // RETURNSUB 	Tentative 	EIP 615
-                printf("RETURNSUB todo\n");
-            break;
-            case '9': // PUTLOCAL 	Tentative 	EIP 615 	
-                printf("PUTLOCAL todo\n");
-            break;
-            case 'a': // Unused
-                printf("Unused\n");
-            break;
-            case 'b': // GETLOCAL 	Tentative 	EIP 615 
-                printf("GETLOCAL todo\n");
-            break;
-            case 'c': // Unused
-                printf("Unused\n");
-            break;
-            case 'd': // Unused
-                printf("Unused\n");
-            break;
-            case 'e': // Unused
-                printf("Unused\n");
-            break;
-            case 'f': // PUSH1
-                printf("push1\n");
-            break;
-        }
-        break; //b
-
-
-      case 'c': // PUSH1
-        switch (opcode[1]) { //STOP
-            case '0': // STOP
-                printf("STOP\n");
-               // return;
-            break;
-            case '1': // ADD
-                printf("push1\n");
-            break;
-            case '2': // PUSH1
-                printf("push1\n");
-            break;
-            case '3': // PUSH1
-                printf("push1\n");
-            break;
-            case '4': // PUSH1
-                printf("push1\n");
-            break;
-            case '5': // PUSH1
-                printf("push1\n");
-            break;
-            case '6': // PUSH1
-                printf("push1\n");
-            break;
-            case '7': // PUSH1
-                printf("push1\n");
-            break;
-            case '8': // PUSH1
-                printf("push1\n");
-            break;
-            case '9': // PUSH1
-                printf("push1\n");
-            break;
-            case 'a': // PUSH1
-                printf("push1\n");
-            break;
-            case 'b': // PUSH1
-                printf("push1\n");
-            break;
-            case 'c': // PUSH1
-                printf("push1\n");
-            break;
-            case 'd': // PUSH1
-                printf("push1\n");
-            break;
-            case 'e': // PUSH1
-                printf("push1\n");
-            break;
-            case 'f': // PUSH1
-                printf("push1\n");
-            break;
-        }
-        break;
-
-
-      case 'd': //d
-        switch (opcode[1]) {
-
-            case '0': // Unused
-                printf("Unused\n");
-            break;
-            case '1': // Unused
-                printf("push1\n");
-            break;
-            case '2': // PUSH1
-                printf("push1\n");
-            break;
-            case '3': // PUSH1
-                printf("push1\n");
-            break;
-            case '4': // PUSH1
-                printf("push1\n");
-            break;
-            case '5': // PUSH1
-                printf("push1\n");
-            break;
-            case '6': // PUSH1
-                printf("push1\n");
-            break;
-            case '7': // PUSH1
-                printf("push1\n");
-            break;
-            case '8': // PUSH1
-                printf("push1\n");
-            break;
-            case '9': // PUSH1
-                printf("push1\n");
-            break;
-            case 'a': // PUSH1
-                printf("push1\n");
-            break;
-            case 'b': // PUSH1
-                printf("push1\n");
-            break;
-            case 'c': // PUSH1
-                printf("push1\n");
-            break;
-            case 'd': // PUSH1
-                printf("push1\n");
-            break;
-            case 'e': // PUSH1
-                printf("push1\n");
-            break;
-            case 'f': // PUSH1
-                printf("push1\n");
-            break;
-        }
-        break;
-
-
-      case 'e':
-        switch (opcode[1]) {
-
-
-            case '0': // Invalid
-                printf("E0\n");
-            break;
-            case '1': // SLOADBYTES 	Only referenced in pyethereum 	- 	-
-                printf("SLOADBYTES todo\n");
-            break;
-            case '2': // SSTOREBYTES 	Only referenced in pyethereum 	- 	-
-                printf("SSTOREBYTES todo\n");
-            break;
-            case '3': // SSIZE
-                printf("SSIZE todo\n");
-            break;
-            case '4': // Invalid
-                printf("E4 Invaid\n");
-            break;
-            case '5': // Invalid
-                printf("E5 Invalid\n");
-            break;
-            case '6': // Invalid
-                printf("E6 Invalid\n");
-            break;
-            case '7': // Invalid
-                printf("E7 Invalid\n");
-            break;
-            case '8': // Invalid
-                printf("E8 Invalid\n");
-            break;
-            case '9': // Invalid
-                printf("E9 Invalid\n");
-            break;
-            case 'a': // Invalid
-                printf("EA Invalid\n");
-            break;
-            case 'b': // Invalid
-                printf("EB Invalid\n");
-            break;
-            case 'c': // Invalid
-                printf("EC Invalid\n");
-            break;
-            case 'd': // Invalid
-                printf("ED Invalid\n");
-            break;
-            case 'e': // Invalid
-                printf("EE Invalid\n");
-            break;
-            case 'f': // Invalid
-                printf("EF Invalid\n");
-            break;
-        }
-        break;
-
-
-     case 'f':
-        switch (opcode[1]) {
-
-
-            case '0': //CREATE	A9	val, ost, len	addr		addr = keccak256(rlp([address(this), this.nonce]))	
-                printf("F0\n");
-            break;
-            case '1': //F1	CALL	AA	gas, addr, val, argOst, argLen, retOst, retLen	success	mem[retOst:retOst+retLen-1] := returndata	
-                printf("F1\n");
-            break;
-            case '2': //F2	CALLCODE same as DELEGATECALL, but does not propagate original...
-                printf("F2\n");
-            break;
-            case '3': //F3	RETURN	0*	ost, len	.		return mem[ost:ost+len-1]
-                printf("F3\n");
-            break;
-            case '4': //F4	DELEGATECALL	AA	gas, addr, argOst, argLen, retOst, retLen	success	mem[retOst:retOst+retLen-1] := returndata
-                printf("F4\n");
-            break;
-            case '5': //F5	CREATE2	A9	val, ost, len, salt	addr		addr = keccak256(0xff ++ address(th...
-                printf("F5\n");
-            break;
-            case '6': //F6-F9	invalid		
-                printf("Invalid\n");
-            break;
-            case '7': //F6-F9	invalid
-                printf("Invalid\n");
-            break;
-            case '8': //F6-F9	invalid
-                printf("Invalid\n");
-            break;
-            case '9': //F6-F9	invalid
-                printf("Invalid\n");
-            break;
-            case 'a': //FA	STATICCALL	AA	gas, addr, argOst, argLen, retOst, retLen	success	mem[retOst:retOst+retLen-1] := returndata	
-                {
-             /*   uint32_t gas = read_next_u32(state);
-                uint32_t addr = read_next_u32(state);
-                uint32_t argOst = read_next_u32(state);
-                uint32_t argLen = read_next_u32(state);
-                uint32_t retOst = read_next_u32(state);
-                uint32_t retLen = read_next_u32(state);
-
-                bool success = static_call(gas, addr, &state->contract_bytecode[argOst], argLen, &state->contract_bytecode[retOst], retLen);
-
-                    if (!success) {
-                    //revert();
+                // Perform multiplication and then modulo
+                result = (a * b) % c;
+                stack_push(stack, result);
+                break;
+            case 0x0a: // EXP
+                int64_t exponent = (int64_t)stack_pop(stack);
+                a = (int64_t)stack_pop(stack);
+                // Handle large exponents efficiently to avoid overflow
+                result = 1;
+                while (exponent > 0) {
+                    if (exponent & 1) {
+                    result *= a;
+                    if (result < a) { // Overflow occurred
+                    // Overflow error, e.g., throw an exception or return an error code
+                    fprintf(stderr, "Error: Integer overflow in exponential operation\n");
+                    exit(1);
                     }
-*/
+                    }
+                    a *= a;
+                    if (a < 1) { // Overflow occurred
+                    // Handle overflow error, e.g., throw an exception or return an error code
+                    fprintf(stderr, "Error: Integer overflow in exponential operation\n");
+                    exit(1);
+                    }
+                    exponent >>= 1;
                 }
-            break;
-            case 'b': //FB	invalid	
-                printf("FB Invalid/Unused\n");
-            break;
-            case 'c': //TXEXECGAS 	Not in yellow paper FIXME		
-                printf("FC\n");
-            break;
-            case 'd': // FD	REVERT	0*	ost, len	.		revert(mem[ost:ost+len-1])
-                {	
-                unsigned char ost_len = state->contract_bytecode[state->pc++];
-                unsigned short ost = state->stack[state->stack_pointer - ost_len];
-                unsigned short len = state->stack[state->stack_pointer - 1];
+                stack_push(stack, result);
+                break;
+            case 0x0b: // SIGNEXTEND
+                if (stack->top < 2) {
+                printf("Not enough elements on the stack for SIGNEXTEND operation.\n");
+                exit(1);
+                }
+                uint32_t b = (uint32_t)stack_pop(stack); // Cast the popped value to uint32_t
+                a = stack_pop(stack);
 
-                //revert((unsigned char*)ost, len);
+                if (b & 0x80000000) { // If the most significant bit of b is set
+                a &= ~(~0u << (b & 0x1f)); // Mask the lower 5 bits of b and apply the mask to a
+                } else {
+                a &= 0xffffffffffffffff; // No sign extension, keep the original value of a
+                }
+                stack_push(stack, a);
+                break;
+            case 0x10: // LT
+                if (stack->top < 1) {  // stack init = -1 so 2 values is < 1
+                printf("Not enough elements on the stack for LT operation.\n");
+                exit(1);
+                }
+
+                b = stack_pop(stack);
+                a = stack_pop(stack);
+
+                result = (a < b) ? 1 : 0;  //int64_t result 
+                stack_push(stack, result);
+                break;
+            case 0x11: // GT
+                if (stack->top < 1) {  // stack init = -1 so 2 values is < 1
+                printf("Not enough elements on the stack for LT operation.\n");
+                exit(1);
+                }
+
+                b = stack_pop(stack);
+                a = stack_pop(stack);
+
+                result = (a > b) ? 1 : 0;  //int64_t result 
+                stack_push(stack, result);
+                break;
+            case 0x12: // SLT
+                if (stack->top < 1) {
+                printf("Not enough elements on the stack for SLT operation.\n");
+                exit(1);
+                }
+
+                b = stack_pop(stack);
+                a = stack_pop(stack);
+
+                result = (int64_t)((int64_t)a < (int64_t)b) ? 1 : 0;  //int64_t result 
+                stack_push(stack, result);
+                break;
+            case 0x13: // SGT
+                if (stack->top < 1) {
+                printf("Not enough elements on the stack for SLT operation.\n");
+                exit(1);
+                }
+
+                b = stack_pop(stack);
+                a = stack_pop(stack);
+
+                result = (int64_t)((int64_t)a > (int64_t)b) ? 1 : 0;  //int64_t result 
+                stack_push(stack, result);
+                break;
+            case 0x14: // EQ
+                if (stack->top < 1) {
+                printf("Not enough elements on the stack for EQ operation.\n");
+                exit(1);
+                }
+
+                a = stack_pop(stack);
+                b = stack_pop(stack);
+
+                result = (a == b) ? 1 : 0;  //int64_t result 
+                stack_push(stack, result);
+                break;
+            case 0x15: // ISZERO
+                if (stack->top < 0) {
+                printf("Not enough elements on the stack for ISZERO operation.\n");
+                exit(1);
+                }
+
+                a = stack_pop(stack);
+
+                result = (a == 0) ? 1 : 0;  //int64_t result 
+                stack_push(stack, result);
+                break;
+            case 0x16: // AND
+                if (stack->top < 1) {
+                printf("Not enough elements on the stack for AND operation.\n");
+                exit(1);
+                }
+
+                a = stack_pop(stack);
+                b = stack_pop(stack);
+
+                result = a & b;  //int64_t result 
+                stack_push(stack, result);
+                break;
+            case 0x17: // OR
+                if (stack->top < 1) {
+                printf("Not enough elements on the stack for OR operation.\n");
+                exit(1);
+                }
+
+                a = stack_pop(stack);
+                b = stack_pop(stack);
+
+                result = a | b;  //int64_t result 
+                stack_push(stack, result);
+                break;
+            case 0x18: // XOR
+                if (stack->top < 1) {
+                    printf("Not enough elements on the stack for XOR operation.\n");
+                    exit(1);
+                }
+
+                a = stack_pop(stack);
+                b = stack_pop(stack);
+
+                result = a ^ b;  //int64_t result 
+                stack_push(stack, result);
+                break;
+            case 0x19: // NOT
+                if (stack->top < 0) {
+                    printf("Not enough elements on the stack for NOT operation.\n");
+                    exit(1);
+                }
+
+                a = stack_pop(stack);
+
+                result = ~a;  //int64_t result 
+                stack_push(stack, result);
+                break;
+            case 0x1a: // BYTE
+                if (stack->top < 1) {
+                    printf("Not enough elements on the stack for BYTE operation.\n");
+                    exit(1);
+                }
+
+                b = stack_pop(stack); // byte offset
+                a = stack_pop(stack); // 32-byte value
+
+                if (b < 0 || b >= 32) {
+                    printf("Byte offset out of range for BYTE operation.\n");
+                    exit(1);
+                }
+
+                result = (a >> (8 * b)) & 0xFF;  //int64_t result 
+                stack_push(stack, result);
+                break;
+            case 0x1b: // SHL
+                if (stack->top < 1) {
+                    printf("Not enough elements on the stack for SHL operation.\n");
+                    exit(1);
+                }
+
+                b = stack_pop(stack); // shift
+                a = stack_pop(stack); // value
+
+                if (b > 255) {
+                    result = 0;  // Shift greater than 255, return 0
+                } else {
+                    result = a << b;  //int64_t result 
+                }
+                stack_push(stack, result);
+                break;
+            case 0x1c: // SHR
+                if (stack->top < 1) {
+                    printf("Not enough elements on the stack for SHR operation.\n");
+                    exit(1);
+                }
+
+                b = stack_pop(stack); // shift
+                a = stack_pop(stack); // value
+
+                if (b > 255) {
+                    result = 0;  // Shift greater than 255, return 0
+                } else {
+                    result = a >> b;  //int64_t result 
+                }
+                stack_push(stack, result);
+                break;
+            case 0x1d: // SAR
+                if (stack->top < 1) {
+                    printf("Not enough elements on the stack for SAR operation.\n");
+                    exit(1);
+                }
+
+                b = stack_pop(stack); // shift
+                a = stack_pop(stack); // value
+
+                if (b > 63) {
+                    result = (a < 0) ? INT64_MIN : 0;  // Shift greater than 63, return the appropriate signed value
+                } else {
+                    result = a >> b;  //int64_t result 
+                }
+                stack_push(stack, result);
+                break;
+            case 0x1e:
+                    //Sha32 is not used so compute Keccak-256 hash is todo Dilithium
+                break;
+
+/********************************
+
+ **** Instructions 0x30 to 0x48 deal with blockchain operations 
+
+*********************************/
+
+            case 0x30:
+                    //Get address of currently executing account, simply place onto the stack as part of an init
+                break;
+            case 0x31: // BALANCE
+                if (stack->top < 0) {
+                    printf("Not enough elements on the stack for BALANCE operation.\n");
+                    exit(1);
+                }
+                //a = stack_pop(stack); // Pop the address from the stack
+
+                // TODO function 'get_account_balance' that returns the balance in wei for a given address
+                //int64_t balance = get_account_balance((char*)&a, 20); // Convert the int64_t to a char array and pass it to the function
+
+                //stack_push(stack, balance); // Push the balance onto the stack
+                break;
+            case 0x32: // ORIGIN
+                break;
+            case 0x33: // CALLER
+                break;
+            case 0x34: // CALLVALUE
+                break;
+            case 0x35: // CALLDATALOAD
+                break;
+            case 0x36: // CALLDATASIZE
+                break;
+            case 0x37: // CODEDATACOPY
+                break;
+            case 0x38: // CODESIZE
+                break;
+            case 0x39: // CODECOPY
+                break;
+            case 0x3a: // GASPRICE
+                break;
+            case 0x3b: // EXTCODESIZE
+                break;
+            case 0x3c: // EXTCODESIZE
+                break;
+            case 0x3d: // EXTCODECOPY
+                break;
+            case 0x3e: // EXTCODESIZE
+                break;
+            case 0x3f: // EXTCODEHASH
+                break;
+            case 0x40: // BLOCKHASH
+                break;
+            case 0x41: // COINBASE
+                break;
+            case 0x42: // TIMESTAMP
+                break;
+            case 0x43: // NUMBER
+                break;
+            case 0x44: // PREVANDAO
+                break;
+            case 0x45: // GASLIMIT
+                break;
+            case 0x46: // CHAINID
+                break;
+            case 0x47: // SELFBALANCE
+                break;
+            case 0x48: // BASEFEE
+                break;
+           case 0x50: // POP
+                if (stack->top < 0) {
+                printf("Stack underflow in case!\n");
+                exit(1);
+                }
+                --stack->top; // Decrement the top index without returning the value
+                break;
+            case 0x51: // MLOAD
+                a = stack_pop(stack); // Offset
+                if (a < 0 || a >= stack->memory->size * 8) {
+                    printf("Error: Offset out of bounds\n");
+                    return 0;
+                }
+                uint64_t load_word_offset = a / 8;
+                uint8_t load_bit_offset = a % 8;
+                uint64_t load_word = stack->memory->data[load_word_offset];
+                b = (load_word >> load_bit_offset) & 0xFF;
+                stack_push(stack, b);
+                break;
+            case 0x52: // MSTORE
+                b = stack_pop(stack); // Value to store
+                a = stack_pop(stack); // Offset
+                if (a < 0 || a >= stack->memory->size * 8) {
+                    printf("Error: Offset out of bounds\n");
+                    return -1;
+                }
+                uint64_t store_word_offset = a / 8;
+                uint8_t store_bit_offset = a % 8;
+                uint64_t store_word = (stack->memory->data[store_word_offset] & ~(0xFF << store_bit_offset)) |
+                                       ((b & 0xFF) << store_bit_offset);
+                stack->memory->data[store_word_offset] = store_word;
+                break;
+            case 0x53: // MSTORE8
+                b = stack_pop(stack) & 0xFF; // Value to store (truncated to 8 bits)
+                a = stack_pop(stack); // Offset
+                if (a < 0 || a >= stack->memory->size * 8) {
+                    printf("Error: Offset out of bounds\n");
+                    return -1;
+                }
+                uint64_t store8_byte_offset = a / 8;
+                stack->memory->data[store8_byte_offset] = (stack->memory->data[store8_byte_offset] & ~(0xFF << (a % 8))) |
+                                                          ((b & 0xFF) << (a % 8));
+                break;
+            case 0x54: // SLOAD
+                a = stack_pop(stack); // Key
+                int64_t** storage_address_sload = stack_get_storage_address(stack, a);
+                if (*storage_address_sload == NULL) {
+                stack_push(stack, 0);
+                } else {
+                stack_push(stack, **storage_address_sload);
+                }
+                break;
+            case 0x55: // SSTORE
+                b = stack_pop(stack); // Value
+                a = stack_pop(stack); // Key
+                int64_t** storage_address_sstore = stack_get_storage_address(stack, a);
+                if (*storage_address_sstore == NULL) {
+                *storage_address_sstore = malloc(sizeof(int64_t));
+                if (*storage_address_sstore == NULL) {
+                perror("Failed to allocate memory for storage value");
+                exit(1);
+                }
+                }
+                **storage_address_sstore = b;
+                break;
+            case 0x56: // JUMP
+                a = stack_pop(stack); // Counter: byte offset in the deployed code
+                if (a < 0 || a >= size) {
+                printf("Invalid jump destination\n");
+                return -1;
+                }
+
+                // Check if the destination is a JUMPDEST instruction
+                if (bytecode[a] != 0x5b) {
+                printf("Jump destination is not a JUMPDEST\n");
+                return -1;
+                }
+
+                pc = bytecode + a; // Alter the program counter
+                break;
+            case 0x57: // JUMPI
+                b = stack_pop(stack); // Condition
+                a = stack_pop(stack); // Counter: byte offset in the deployed code
+
+                if (b != 0) {
+                if (a < 0 || a >= size) {
+                printf("Invalid jump destination\n");
+                return -1;
+                }
+
+                // Check if the destination is a JUMPDEST instruction
+                if (bytecode[a] != 0x5b) {
+                printf("Jump destination is not a JUMPDEST\n");
+                return -1;
+                }
+
+                pc = bytecode + a; // Alter the program counter if the condition is true
+                }
+                break;
+            case 0x58: // PC
+                stack_push(stack, (int64_t)(pc - bytecode)); // Push the program counter value onto the stack
+                break;
+            case 0x59: // MSIZE
+                stack_push(stack, (int64_t)(stack->memory->size * 8)); // Push the memory size in bytes (times 8 to convert from words to bytes)
+                break;
+            case 0x5a:
+                    //GAS
+                break;
+            case 0x5b:
+                    //JUMPDEST - check for JUMPDEST when performing a JUMP or JUMPI operation to validate destination.
+                break;
+            case 0x5f: // PUSH0
+                stack_push(stack, 0); // Push the value 0 onto the stack
+                break;
+            case 0x60: // PUSH1 - single byte, stack_push(stack, (int64_t)*(pc++));
+            case 0x61: // PUSH2
+            case 0x62: // PUSH3
+            case 0x63: // PUSH4
+            case 0x64: // PUSH5
+            case 0x65: // PUSH6
+            case 0x66: // PUSH7
+            case 0x67: // PUSH8
+            case 0x68: // PUSH9
+            case 0x69: // PUSH10
+            case 0x6a: // PUSH11
+            case 0x6b: // PUSH12
+            case 0x6c: // PUSH13
+            case 0x6d: // PUSH14
+            case 0x6e: // PUSH15
+            case 0x6f: // PUSH16
+            case 0x70: // PUSH17
+            case 0x71: // PUSH18
+            case 0x72: // PUSH19
+            case 0x73: // PUSH20
+            case 0x74: // PUSH21
+            case 0x75: // PUSH22
+            case 0x76: // PUSH23
+            case 0x77: // PUSH24
+            case 0x78: // PUSH25
+            case 0x79: // PUSH26
+            case 0x7a: // PUSH27
+            case 0x7b: // PUSH28
+            case 0x7c: // PUSH29
+            case 0x7d: // PUSH30
+            case 0x7e: // PUSH31
+            case 0x7f: // PUSH32
+
+                uint8_t n = opcode - 95; //0x60 = 96 ~ 0x7f = 127
+                //printf("Which push? %d\n", opcode - 95); //debug
                 
-                }            
-            break;
-            case 'e': //FE	INVALID	AF			designated invalid opcode - EIP-141	
-                printf("INVALID (0x%X)\n", 0xFE);
-            break;
-            case 'f': //FF	SELFDESTRUCT	AB	addr
-                { // SELFDESTRUCT
-                    // Get the address to send the remaining balance to from the stack
-                    unsigned char address[20];
-                        for (int i = 0; i < 20; i++) {
-                        address[i] = state->stack[--state->stack_pointer];
-                        }
-    
-                // Perform the self-destruct operation
-                // (This can be implemented in different ways depending on the context,
-                // for example, you could transfer the remaining balance of the contract
-                // to the specified address, delete the contract from storage, etc.)
-
-                // Set the execution status to "self-destructed"
-               /*  state->execution_status = SELFDESTRUCTED; */
-
-                // Exit the interpreter loop
+                for (int i = 0; i < n; i++) {
+                //printf("\nPC: %ld\n", (int64_t)*(pc++)); //pc debug
+                stack_push(stack, (int64_t)*(pc++));
                 }
-            break;
-        }
-        break;
 
-      default:
-           printf("Unknown opcode %s at instruction %d\n", opcode, state->pc);
-        break;
+                break;
+            case 0x80: // DUP1
+            case 0x81:
+            case 0x82:
+            case 0x83:
+            case 0x84:
+            case 0x85:
+            case 0x86:
+            case 0x87:
+            case 0x88:
+            case 0x89:
+            case 0x8A:
+            case 0x8B:
+            case 0x8C:
+            case 0x8D:
+            case 0x8E:
+            case 0x8F:
+                stack_dup(stack, opcode - 127);
+            break;
+            case 0x90: // SWAP1
+            case 0x91:
+            case 0x92:
+            case 0x93:
+            case 0x94:
+            case 0x95:
+            case 0x96:
+            case 0x97:
+            case 0x98:
+            case 0x99:
+            case 0x9A:
+            case 0x9B:
+            case 0x9C:
+            case 0x9D:
+            case 0x9E:
+            case 0x9F:
+                stack_swap(stack, opcode - 143); //0x90 = 144);
+            break;
+            case 0xa0: // LOG 0 - 4
+            case 0xa1:
+            case 0xa2:
+            case 0xa3:
+            case 0xa4:
+                stack_LOG(stack, opcode - 160); //0a = 160
+            break;
+            case 0xf0: //Create new contract        
+            break;
+            case 0xf1: //code       
+            break;
+            case 0xf2: //callcode        
+            break;
+            case 0xf3: //return       
+            break;
+            case 0xf4: //DELEGATECALL
+            break;
+            case 0xf5: //CREATE2
+            break;
+            case 0xfa: //STATICCALL
+            break;
+            case 0xfd: //REVERT
+            break;
+            case 0xfe: //INVALID
+            break;
+            case 0xff: //SELFDESTRUCT
+            break;
+            default:
+                printf("Invalid opcode: 0x%02X\n", opcode);
+                exit(1);
+        }
+
+                print_stack(stack); //debug
+
     }
-     state->pc += 2; // increment by 2 to skip to the next hex encoded byte
-     //state->pc += 1;
-  }
+
+    return stack_pop(stack);
 }
 
 int main() {
-  evm_state state;
 
-    // load contract bytecode from file or source
-    load_contract_from_file("smart_contract.bin", &state);
+    //Start the stack instance
+    Stack* stack = stack_create(1024);
 
-    printf("%s", state.contract_bytecode);
+    //Execute code
+    uint8_t bytecode1[] = {0x60, 0x01, 0x60, 0x02, 0x01}; //ADD
+    printf("Result ADD: %ld\n\n", execute_bytecode(bytecode1, sizeof(bytecode1), stack));
 
-    // execute the contract
-    run_evm(&state);
+    //print_stack(stack) executed in execute_bytecode function
 
-  return 0;
+    //Destroy the stack
+    stack_destroy(stack); 
+
+    //Test every isntruction
+    Stack* stack2 = stack_create(1024);
+
+    uint8_t bytecode_stop[] = {0x60, 0x01, 0x60, 0x02, 0x00}; //STOP
+    printf("Result STOP: %ld\n\n", execute_bytecode(bytecode_stop, sizeof(bytecode_stop), stack2));
+
+    uint8_t bytecode2[] = {0x60, 0x03, 0x60, 0x02, 0x02}; //MUL
+    printf("Result MUL: %ld\n\n", execute_bytecode(bytecode2, sizeof(bytecode2), stack2));
+
+    uint8_t bytecode3[] = {0x60, 0x03, 0x60, 0x04, 0x03}; //SUB
+    printf("Result SUB: %ld\n\n", execute_bytecode(bytecode3, sizeof(bytecode3), stack2));
+
+    uint8_t bytecode4[] = {0x60, 0x24, 0x60, 0x12, 0x04}; //DIV
+    printf("Result DIV: %ld\n\n", execute_bytecode(bytecode4, sizeof(bytecode4), stack2));
+
+    uint8_t bytecode5[] = {0x60, 0x24, 0x60, 0x12, 0x05}; //SDIV
+    printf("Result SDIV: %ld\n\n", execute_bytecode(bytecode5, sizeof(bytecode5), stack2));
+
+    uint8_t bytecode6[] = {0x60, 0x26, 0x60, 0x12, 0x06}; //MOD
+    printf("Result MOD: %ld\n\n", execute_bytecode(bytecode6, sizeof(bytecode6), stack2));
+
+    uint8_t bytecode7[] = {0x60, 0x28, 0x60, 0x12, 0x07}; //SMOD
+    printf("Result SMOD: %ld\n\n", execute_bytecode(bytecode7, sizeof(bytecode7), stack2));
+
+    uint8_t bytecode8[] = {0x60, 0x28, 0x60, 0x13, 0x60, 0x05, 0x08}; //ADDMOD
+    printf("Result ADDMOD: %ld\n\n", execute_bytecode(bytecode8, sizeof(bytecode8), stack2));
+
+    uint8_t bytecode9[] = {0x60, 0x28, 0x60, 0x13, 0x60, 0x05, 0x09}; //MULMOD
+    printf("Result MULMOD: %ld\n\n", execute_bytecode(bytecode9, sizeof(bytecode9), stack2));
+
+    uint8_t bytecode10[] = {0x60, 0x02, 0x60, 0x03, 0x0a}; //EXP
+    printf("Result EXP: %ld\n\n", execute_bytecode(bytecode10, sizeof(bytecode10), stack2));
+
+    uint8_t bytecode11[] = {0x60, 0x01, 0x60, 0x01, 0x60, 0x80, 0x0b}; // PUSH1 1, PUSH1 -128, SIGNEXTEND
+    printf("Result SIGNEXTEND: %ld\n\n", execute_bytecode(bytecode11, sizeof(bytecode11), stack2));
+
+    stack_clear(stack2);
+
+    uint8_t bytecode12[] = {0x60, 0x09, 0x60, 0x0a, 0x10}; //LT
+    printf("Result LT: %ld\n\n", execute_bytecode(bytecode12, sizeof(bytecode12), stack2));
+
+    uint8_t bytecode13[] = {0x60, 0x09, 0x60, 0x0a, 0x11}; //GT
+    printf("Result GT: %ld\n\n", execute_bytecode(bytecode13, sizeof(bytecode13), stack2));
+
+    uint8_t bytecode14[] = {0x60, 0x09, 0x60, 0x0a, 0x12}; //SLT
+    printf("Result SLT: %ld\n\n", execute_bytecode(bytecode14, sizeof(bytecode14), stack2));
+
+    uint8_t bytecode15[] = {0x60, 0x09, 0x60, 0x0a, 0x13}; //SGT
+    printf("Result SLT: %ld\n\n", execute_bytecode(bytecode15, sizeof(bytecode15), stack2));
+
+    stack_clear(stack2);
+
+    uint8_t bytecode16[] = {0x60, 0x0a, 0x60, 0x0a, 0x14}; //EQ
+    printf("Result EQ: %ld\n\n", execute_bytecode(bytecode16, sizeof(bytecode16), stack2));
+
+    uint8_t bytecode17[] = {0x60, 0x00, 0x15}; //ISZERO
+    printf("Result ISZERO: %ld\n\n", execute_bytecode(bytecode17, sizeof(bytecode17), stack2));
+
+    uint8_t bytecode18[] = {0x60, 0x0F, 0x60, 0xFF, 0x16}; // PUSH1 15, PUSH1 255, AND
+    printf("Result AND: %ld\n\n", execute_bytecode(bytecode18, sizeof(bytecode18), stack2));
+
+    stack_clear(stack2);
+
+    uint8_t bytecode19[] = {0x60, 0x0F, 0x60, 0x0A, 0x17}; // PUSH1 15, PUSH1 10, OR
+    printf("Result OR: %ld\n\n", execute_bytecode(bytecode19, sizeof(bytecode19), stack2));
+
+    uint8_t bytecode_xor[] = {0x60, 0x0F, 0x60, 0x0A, 0x18}; // PUSH1 15, PUSH1 10, XOR
+    printf("Result XOR: %ld\n\n", execute_bytecode(bytecode_xor, sizeof(bytecode_xor), stack2));
+
+    uint8_t bytecode_not[] = {0x60, 0x0A, 0x19}; // PUSH1 10, NOT
+    printf("Result NOT: %ld\n\n", execute_bytecode(bytecode_not, sizeof(bytecode_not), stack2));
+
+    uint8_t bytecode_byte[] = {0x60, 0x20, 0x60, 0x01, 0x1a}; // PUSH1 32, PUSH1 1, BYTE
+    printf("Result BYTE: %ld\n\n", execute_bytecode(bytecode_byte, sizeof(bytecode_byte), stack2));
+
+    uint8_t bytecode_shl[] = {0x60, 0x01, 0x60, 0x02, 0x1b}; // PUSH1 1, PUSH1 2, SHL
+    printf("Result SHL: %ld\n\n", execute_bytecode(bytecode_shl, sizeof(bytecode_shl), stack2));
+
+    uint8_t bytecode_shr[] = {0x60, 0x01, 0x60, 0x02, 0x1c}; // PUSH1 1, PUSH1 2, SHR
+    printf("Result SHR: %ld\n\n", execute_bytecode(bytecode_shr, sizeof(bytecode_shr), stack2));
+
+    uint8_t bytecode_sar[] = {0x60, 0x01, 0x60, 0x02, 0x1d}; // PUSH1 1, PUSH1 2, SAR
+    printf("Result SAR: %ld\n\n", execute_bytecode(bytecode_sar, sizeof(bytecode_sar), stack2));
+
+    // Test MSTORE
+
+    stack_clear(stack2);
+
+    uint8_t bytecode_push0[] = {
+ 0x60, 0x0a,
+ 0x61, 0x08, 0x07, 
+ 0x62, 0x07, 0x06, 0x05, 
+ 0x63, 0x04, 0x03, 0x02, 0x01, 
+ 0x64, 0x09, 0x08, 0x07, 0x06, 0x05,
+ 0x65, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08,
+ 0x66, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01,
+ 0x67, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02,
+ 0x68, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01,
+ 0x69, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09,
+ 0x6a, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08,
+ 0x6b, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07,
+ 0x6c, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06,
+ 0x6d, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05,
+ 0x6e, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04,
+ 0x6f, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03,
+ 0x70, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02,
+ 0x71, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01,
+ 0x72, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09,
+ 0x73, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08,
+ 0x74, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07,
+ 0x75, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06,
+ 0x76, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05,
+ 0x77, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x08, 0x07, 0x06, 0x05,
+ 0x78, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x08, 0x07, 0x06, 0x05,
+ 0x79, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x08, 0x07, 0x06, 0x05,
+ 0x7a, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x08, 0x07, 0x06, 0x05, 0x04,
+ 0x7b, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x08, 0x07, 0x06, 0x05, 0x04,  0x03,
+ 0x7c, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02,
+ 0x7d, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x08, 0x07, 0x06, 0x05, 0x04,  0x03, 0x02, 0x01,
+ 0x7e, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09,
+ 0x7f, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x08, 0x07, 0x06, 0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01, 0x09, 0x0a
+};
+
+    printf("Result: %ld\n", execute_bytecode(bytecode_push0, sizeof(bytecode_push0), stack2));
+
+   stack_clear(stack2);
+
+//Test mload 0x51, mstore 0x52, mstore8 0x53
+uint8_t bytecode_mstore[] = {0x60, 0x01, 0x62, 0x02, 0x03, 0x04, 0x52}; // MSTORE
+execute_bytecode(bytecode_mstore, sizeof(bytecode_mstore), stack2);
+
+uint8_t bytecode_mload[] = {0x60, 0x05, 0x51, 0x60, 0x06, 0x50}; // MLOAD
+execute_bytecode(bytecode_mload, sizeof(bytecode_mload), stack2);
+
+   stack_clear(stack2);
+
+uint8_t bytecode_mstore8[] = {0x60, 0x07, 0x60, 0x08, 0x53, 0x60, 0x09, 0x51, 0x60, 0x0a, 0x50}; // MSTORE8, MLOAD
+execute_bytecode(bytecode_mstore8, sizeof(bytecode_mstore8), stack2);
+
+   stack_clear(stack2);
+
+uint8_t bytecode_sstore[] = {0x61, 0x0b, 0x02, 0x60, 0x03, 0x55}; // SSTORE
+execute_bytecode(bytecode_sstore, sizeof(bytecode_sstore), stack2);
+
+uint8_t bytecode_sload[] = {0x60, 0x00, 0x54}; // SLOAD
+execute_bytecode(bytecode_sload, sizeof(bytecode_sload), stack2);
+
+//JUMP - Test bytecode for JUMP
+
+
+//PC 0x58
+uint8_t bytecode_pc[] = {0x58}; // PC
+// Execute the bytecode and print the result
+int64_t result = execute_bytecode(bytecode_pc, sizeof(bytecode_pc), stack2);
+
+// MSIZE 0x59
+uint8_t bytecode_msize[] = {0x59}; // MSIZE
+result = execute_bytecode(bytecode_msize, sizeof(bytecode_msize), stack2);
+
+   stack_clear(stack2);
+
+//DUP
+
+    uint8_t bytecode_d[] = {0x65, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x83};
+    execute_bytecode(bytecode_d, sizeof(bytecode_d), stack2);
+
+//Swaps
+
+   stack_clear(stack2);
+
+    uint8_t bytecode_swap[] = {0x63, 0x04, 0x03, 0x02, 0x01, 0x92};
+    execute_bytecode(bytecode_swap, sizeof(bytecode_swap), stack2);
+
+   stack_clear(stack2);
+
+//Logs - 0 .. 4
+    uint8_t bytecode_LOG0[] = {0x61, 0x01, 0x02, 0xa0, 0x60, 0x00};
+    execute_bytecode(bytecode_LOG0, sizeof(bytecode_LOG0), stack2);
+    uint8_t bytecode_LOG1[] = {0x62, 0x01, 0x02, 0x03, 0xa1, 0x60, 0x00};
+    execute_bytecode(bytecode_LOG1, sizeof(bytecode_LOG1), stack2);
+    uint8_t bytecode_LOG2[] = {0x63, 0x01, 0x02, 0x03, 0x04, 0xa2, 0x60, 0x00};
+    execute_bytecode(bytecode_LOG2, sizeof(bytecode_LOG2), stack2);
+    uint8_t bytecode_LOG3[] = {0x64, 0x01, 0x02, 0x03, 0x04, 0x05, 0xa3, 0x60, 0x00};
+    execute_bytecode(bytecode_LOG3, sizeof(bytecode_LOG3), stack2);
+    uint8_t bytecode_LOG4[] = {0x65, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0xa4, 0x60, 0x00};
+    execute_bytecode(bytecode_LOG4, sizeof(bytecode_LOG4), stack2);
+
+   return 0;
 }
-
-/* 
-load_contract(): function takes a smart contract bytecode and loads it into the virtual machine's memory, preparing it for execution.
-
-call_function(): function takes a contract address, function signature, and input parameters and sends a message to the virtual machine to call the specified function on the smart contract.
-
-get_storage(): function takes a contract address and a storage location and returns the value stored at that location.
-
-set_storage(): function takes a contract address, a storage location, and a value, and sets the value at the specified storage location.
-
-get_balance(): function takes an address and returns the balance of the account associated with that address.
-
-transfer_value(): function takes an address, an amount, and a sender address and transfers the specified amount of value from the sender to the address.
-
-emit_event(): function takes an event signature and a set of event data, and emits an event to the blockchain.
-
-get_event(): function takes an event signature and a gets event data.
-
-get_code(): function takes a contract address and returns the bytecode of the smart contract at that address.
-
-get_return_data(): function retrieves the output data of the last executed smart contract function call.
-
-create_contract(): function ttakes bytecode, a value, and a sender address and creates a new contract on the blockchain.
-
-delete_contract(): function takes a contract address and deletes the smart contract at that address.
-*/
-
